@@ -8,11 +8,7 @@ public class SalesReport extends ReportGenerator {
     private String periodEnd;
     private String topSellingMedicine;
 
-    public SalesReport(
-            String reportId,
-            String generatedDate,
-            String title) {
-
+    public SalesReport(String reportId, String generatedDate, String title) {
         super(reportId, generatedDate, title);
     }
 
@@ -38,14 +34,10 @@ public class SalesReport extends ReportGenerator {
 
     @Override
     public String generateReport() {
-
         return "===== SALES REPORT =====\n"
                 + "Period: " + periodStart + " to " + periodEnd + "\n"
-                + "Total Revenue: RM "
-                + String.format("%.2f", totalRevenue) + "\n"
-                + "Prescriptions Processed: "
-                + totalPrescriptionsProcessed + "\n"
-                + "Top Selling Medicine: "
-                + topSellingMedicine + "\n";
+                + "Total Revenue: RM " + String.format("%.2f", totalRevenue) + "\n"
+                + "Prescriptions Processed: " + totalPrescriptionsProcessed + "\n"
+                + "Top Selling Medicine: " + topSellingMedicine + "\n";
     }
 }

@@ -14,14 +14,7 @@ public abstract class Notification {
     public Notification() {
     }
 
-    public Notification(
-            String notificationId,
-            String message,
-            String timestamp,
-            NotificationType type,
-            String recipientId,
-            boolean read) {
-
+    public Notification(String notificationId, String message, String timestamp, NotificationType type, String recipientId, boolean read) {
         this.notificationId = notificationId;
         this.message = message;
         this.timestamp = timestamp;

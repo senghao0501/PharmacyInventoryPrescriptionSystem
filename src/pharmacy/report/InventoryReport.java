@@ -8,11 +8,7 @@ public class InventoryReport extends ReportGenerator {
     private int expiredItemsCount;
     private String reportDataForEachMedicine;
 
-    public InventoryReport(
-            String reportId,
-            String generatedDate,
-            String title) {
-
+    public InventoryReport(String reportId, String generatedDate, String title) {
         super(reportId, generatedDate, title);
     }
 
@@ -38,11 +34,9 @@ public class InventoryReport extends ReportGenerator {
 
     @Override
     public String generateReport() {
-
         return "===== INVENTORY REPORT =====\n"
                 + "Total Medicine Types: " + totalItems + "\n"
-                + "Total Stock Value: RM "
-                + String.format("%.2f", totalStockValue) + "\n"
+                + "Total Stock Value: RM " + String.format("%.2f", totalStockValue) + "\n"
                 + "Low Stock Items: " + lowStockItemsCount + "\n"
                 + "Expired Items: " + expiredItemsCount + "\n\n"
                 + reportDataForEachMedicine;

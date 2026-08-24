@@ -6,11 +6,7 @@ public abstract class ReportGenerator {
     private String generatedDate;
     private String title;
 
-    public ReportGenerator(
-            String reportId,
-            String generatedDate,
-            String title) {
-
+    public ReportGenerator(String reportId, String generatedDate, String title) {
         this.reportId = reportId;
         this.generatedDate = generatedDate;
         this.title = title;
