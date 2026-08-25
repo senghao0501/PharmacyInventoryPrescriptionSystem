@@ -1,0 +1,9 @@
+userId|username|password|fullName|contactNumber|email|role|active|extra1|extra2|extra3
+P001|john|1234|John Tan|0121111111|john@gmail.com|PATIENT|true|MRN001|2002-05-10|No known allergy
+P002|ahmad|1234|Ahmad Ali|0122222222|ahmad@gmail.com|PATIENT|true|MRN002|2001-08-20|Penicillin
+P003|mary|1234|Mary Wong|0123333333|mary@gmail.com|PATIENT|true|MRN003|2003-02-15|Aspirin
+D001|doctor1|1234|Dr Lim Wei|0124444444|doctor@gmail.com|DOCTOR|true|DOC001|General Medicine|Outpatient
+D002|doctor2|1234|Dr Tan Mei|0125555555|doctor2@gmail.com|DOCTOR|true|DOC002|Paediatrics|Paediatrics
+PH001|pharmacist1|1234|Sarah Lee|0126666666|pharmacist@gmail.com|PHARMACIST|true|PHARM001|Morning|
+PH002|pharmacist2|1234|David Wong|0127777777|pharmacist2@gmail.com|PHARMACIST|true|PHARM002|Evening|
+A001|admin|admin123|System Admin|0128888888|admin@gmail.com|ADMIN|true|FULL||

@@ -1,0 +1,4 @@
+pharmacyId|pharmacyName|location|active
+PHCY001|Main Pharmacy|Block A Ground Floor|true
+PHCY002|Emergency Pharmacy|Emergency Department|true
+PHCY003|Outpatient Pharmacy|Outpatient Department|true

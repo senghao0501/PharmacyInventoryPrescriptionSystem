@@ -1,38 +1,22 @@
 package pharmacy.model;
 
-import pharmacy.enums.UserRole;
+import pharmacy.enumeration.UserRole;
 
 public class Doctor extends User {
-
     private String licenseNumber;
     private String specialization;
     private String department;
 
-    public Doctor() {
-        setRole(UserRole.DOCTOR);
-    }
-
-    public String getLicenseNumber() {
-        return licenseNumber;
-    }
-
-    public void setLicenseNumber(String licenseNumber) {
+    public Doctor(String userId, String username, String password, String fullName,
+                  String contactNumber, String email, boolean isActive,
+                  String licenseNumber, String specialization, String department) {
+        super(userId, username, password, fullName, contactNumber, email, UserRole.DOCTOR, isActive);
         this.licenseNumber = licenseNumber;
-    }
-
-    public String getSpecialization() {
-        return specialization;
-    }
-
-    public void setSpecialization(String specialization) {
         this.specialization = specialization;
-    }
-
-    public String getDepartment() {
-        return department;
-    }
-
-    public void setDepartment(String department) {
         this.department = department;
     }
-} 
+
+    public String getLicenseNumber() { return licenseNumber; }
+    public String getSpecialization() { return specialization; }
+    public String getDepartment() { return department; }
+}

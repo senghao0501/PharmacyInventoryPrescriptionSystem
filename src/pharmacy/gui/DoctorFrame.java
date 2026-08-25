@@ -1,180 +1,299 @@
 package pharmacy.gui;
 
+import java.awt.BorderLayout;
+import java.awt.GridLayout;
+import java.util.ArrayList;
+import java.util.List;
+import javax.swing.BorderFactory;
+import javax.swing.DefaultListModel;
+import javax.swing.JButton;
+import javax.swing.JComboBox;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JList;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextField;
+
+import pharmacy.manager.InventoryManager;
 import pharmacy.manager.PrescriptionManager;
 import pharmacy.manager.UserManager;
 import pharmacy.model.Doctor;
-import pharmacy.model.User;
-
-import javax.swing.*;
-import java.awt.*;
-import java.util.List;
+import pharmacy.model.Medicine;
+import pharmacy.model.Patient;
+import pharmacy.model.Prescription;
+import pharmacy.model.PrescriptionItem;
 
 public class DoctorFrame extends JFrame {
+    private Doctor doctor;
+    private UserManager userManager;
+    private InventoryManager inventoryManager;
+    private PrescriptionManager prescriptionManager;
 
-    private final Doctor doctor;
-    private final PrescriptionManager prescriptionManager = new PrescriptionManager();
-    private final UserManager userManager = new UserManager();
-    private final JTextArea output = new JTextArea();
+    private JComboBox<Patient> patientComboBox;
+    private JComboBox<Medicine> medicineComboBox;
+    private JTextField quantityField;
+    private JTextField dosageField;
+    private JTextField remarksField;
+    private DefaultListModel<String> itemListModel;
+    private List<PrescriptionItem> selectedItems;
 
-    public DoctorFrame(Doctor doctor) {
+    public DoctorFrame(Doctor doctor, UserManager userManager,
+                       InventoryManager inventoryManager,
+                       PrescriptionManager prescriptionManager) {
         this.doctor = doctor;
-        setTitle("Doctor Dashboard - " + doctor.getFullName());
-        setSize(800, 600);
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        this.userManager = userManager;
+        this.inventoryManager = inventoryManager;
+        this.prescriptionManager = prescriptionManager;
+
+        selectedItems = new ArrayList<>();
+
+        setTitle("Doctor Workspace - " + doctor.getFullName());
+        setSize(850, 600);
         setLocationRelativeTo(null);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+
         buildUI();
     }
 
     private void buildUI() {
-        JPanel buttons = new JPanel(new GridLayout(1, 5, 10, 10));
+        JPanel mainPanel = new JPanel(new BorderLayout(10, 10));
+        mainPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
 
-        JButton searchPatient = new JButton("Search Patient");
-        JButton createPrescription = new JButton("Create Prescription");
-        JButton editPrescription = new JButton("Edit Prescription");
-        JButton cancelPrescription = new JButton("Cancel Prescription");
-        JButton logout = new JButton("Logout");
+        // Top: prescription form
+        JPanel formPanel = new JPanel(new GridLayout(6, 2, 10, 10));
 
-        buttons.add(searchPatient);
-        buttons.add(createPrescription);
-        buttons.add(editPrescription);
-        buttons.add(cancelPrescription);
-        buttons.add(logout);
+        formPanel.add(new JLabel("Select Patient:"));
+        patientComboBox = new JComboBox<>();
+        for (Patient patient : userManager.getPatients()) {
+            patientComboBox.addItem(patient);
+        }
+        formPanel.add(patientComboBox);
 
-        add(buttons, BorderLayout.NORTH);
+        formPanel.add(new JLabel("Select Medicine:"));
+        medicineComboBox = new JComboBox<>();
+        for (Medicine medicine : inventoryManager.getMedicineInventory()) {
+            if (medicine.isActive()) {
+                medicineComboBox.addItem(medicine);
+            }
+        }
+        formPanel.add(medicineComboBox);
 
-        output.setEditable(false);
-        add(new JScrollPane(output), BorderLayout.CENTER);
+        formPanel.add(new JLabel("Quantity:"));
+        quantityField = new JTextField();
+        formPanel.add(quantityField);
 
-        searchPatient.addActionListener(e -> searchPatient());
-        createPrescription.addActionListener(e -> createPrescription());
-        editPrescription.addActionListener(e -> editPrescription());
-        cancelPrescription.addActionListener(e -> cancelPrescription());
-        logout.addActionListener(e -> logout());
+        formPanel.add(new JLabel("Dosage Instructions:"));
+        dosageField = new JTextField();
+        formPanel.add(dosageField);
+
+        formPanel.add(new JLabel("Remarks:"));
+        remarksField = new JTextField();
+        formPanel.add(remarksField);
+
+        mainPanel.add(formPanel, BorderLayout.NORTH);
+
+        // Centre: selected medicines
+        itemListModel = new DefaultListModel<>();
+        JList<String> itemList = new JList<>(itemListModel);
+        mainPanel.add(new JScrollPane(itemList), BorderLayout.CENTER);
+
+        // Bottom: actions
+        JPanel buttonPanel = new JPanel();
+
+        JButton addButton = new JButton("Add Medicine");
+        JButton createButton = new JButton("Create Prescription");
+        JButton clearButton = new JButton("Clear List");
+        JButton cancelButton = new JButton("Cancel Prescription");
+
+        buttonPanel.add(addButton);
+        buttonPanel.add(createButton);
+        buttonPanel.add(clearButton);
+        buttonPanel.add(cancelButton);
+
+        mainPanel.add(buttonPanel, BorderLayout.SOUTH);
+
+        addButton.addActionListener(e -> addMedicine());
+        createButton.addActionListener(e -> createPrescription());
+        clearButton.addActionListener(e -> clearItems());
+        cancelButton.addActionListener(e -> cancelPrescription());
+
+        add(mainPanel);
     }
 
-    private void searchPatient() {
-        String keyword = JOptionPane.showInputDialog(this, "Enter Patient ID or Name:");
-        if (keyword == null) {
+    private void addMedicine() {
+        Medicine medicine = (Medicine) medicineComboBox.getSelectedItem();
+        if (medicine == null) {
             return;
         }
 
-        List<User> patients = userManager.searchPatients(keyword);
-        output.setText("");
+        try {
+            int quantity = Integer.parseInt(quantityField.getText().trim());
+            String dosage = dosageField.getText().trim();
 
-        for (User patient : patients) {
-            output.append(patient.getUserId() + " | " + patient.getFullName() + " | " + patient.getEmail() + "\n");
-        }
+            if (quantity <= 0) {
+                throw new IllegalArgumentException("Quantity must be greater than zero.");
+            }
+            if (dosage.isEmpty()) {
+                throw new IllegalArgumentException("Please enter dosage instructions.");
+            }
 
-        if (patients.isEmpty()) {
-            output.setText("No patient found.");
+            if (!inventoryManager.hasEnoughStock(medicine.getMedicineId(), quantity)) {
+                JOptionPane.showMessageDialog(this, "Insufficient stock: " + medicine.getName());
+                return;
+            }
+
+            PrescriptionItem item = new PrescriptionItem(
+                "ITEM" + System.nanoTime(),
+                quantity,
+                dosage,
+                medicine
+            );
+
+            selectedItems.add(item);
+            itemListModel.addElement(
+                medicine.getName() + " | Quantity: " + quantity + " | " + dosage
+            );
+
+            quantityField.setText("");
+            dosageField.setText("");
+
+        } catch (NumberFormatException e) {
+            JOptionPane.showMessageDialog(this, "Please enter a valid quantity.");
+        } catch (IllegalArgumentException e) {
+            JOptionPane.showMessageDialog(this, e.getMessage());
         }
     }
 
     private void createPrescription() {
-        String patientId = JOptionPane.showInputDialog(this, "Patient ID:");
-        if (patientId == null || patientId.trim().isEmpty()) {
+        Patient patient = (Patient) patientComboBox.getSelectedItem();
+        if (patient == null) {
+            JOptionPane.showMessageDialog(this, "Please select a patient.");
             return;
         }
 
-        String medicineInput = JOptionPane.showInputDialog(this, "Medicine IDs separated by comma:\nExample: M001,M002");
-        if (medicineInput == null) {
+        if (selectedItems.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Please add at least one medicine.");
             return;
         }
-
-        String quantityInput = JOptionPane.showInputDialog(this, "Quantities separated by comma:\nExample: 2,1");
-        if (quantityInput == null) {
-            return;
-        }
-
-        String dosageInput = JOptionPane.showInputDialog(this, "Dosage instructions separated by |:\nExample: 2 times daily|1 time daily");
-        if (dosageInput == null) {
-            return;
-        }
-
-        String remarks = JOptionPane.showInputDialog(this, "Remarks:");
 
         try {
-            String[] medicineIds = medicineInput.split(",");
-            String[] quantityStrings = quantityInput.split(",");
-            String[] dosages = dosageInput.split("\\|");
+            String remarks = remarksField.getText().trim();
 
-            if (medicineIds.length != quantityStrings.length || medicineIds.length != dosages.length) {
-                throw new IllegalArgumentException("Input count does not match.");
-            }
+            Prescription prescription = prescriptionManager.createPrescription(
+                patient, doctor, selectedItems, remarks
+            );
 
-            int[] quantities = new int[quantityStrings.length];
-            for (int i = 0; i < quantityStrings.length; i++) {
-                quantities[i] = Integer.parseInt(quantityStrings[i].trim());
-            }
+            JOptionPane.showMessageDialog(
+                this,
+                "Prescription created successfully!\n\nPrescription ID: " + prescription.getPrescriptionId()
+            );
 
-            String prescriptionId = prescriptionManager.createPrescription(doctor.getUserId(), patientId, medicineIds, quantities, dosages, remarks);
+            clearItems();
 
-            if (prescriptionId != null) {
-                JOptionPane.showMessageDialog(this, "Prescription created successfully.\nPrescription ID: " + prescriptionId);
-            } else {
-                JOptionPane.showMessageDialog(this, "Failed to create prescription.");
-            }
-
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, ex.getMessage());
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(
+                this,
+                e.getMessage(),
+                "Creation Failed",
+                JOptionPane.ERROR_MESSAGE
+            );
         }
     }
 
-    // 新增：修改处方方法
-    private void editPrescription() {
-        String prescriptionId = JOptionPane.showInputDialog(this, "Enter Prescription ID to edit:");
-        if (prescriptionId == null || prescriptionId.trim().isEmpty()) {
-            return;
-        }
-
-        String medicineInput = JOptionPane.showInputDialog(this, "New Medicine IDs (comma separated):");
-        if (medicineInput == null) return;
-        
-        String quantityInput = JOptionPane.showInputDialog(this, "New Quantities (comma separated):");
-        if (quantityInput == null) return;
-        
-        String dosageInput = JOptionPane.showInputDialog(this, "New Dosages (separated by |):");
-        if (dosageInput == null) return;
-        
-        String remarks = JOptionPane.showInputDialog(this, "New Remarks:");
-        
-        try {
-            String[] medicineIds = medicineInput.split(",");
-            String[] quantityStrings = quantityInput.split(",");
-            String[] dosages = dosageInput.split("\\|");
-            
-            int[] quantities = new int[quantityStrings.length];
-            for (int i = 0; i < quantityStrings.length; i++) {
-                quantities[i] = Integer.parseInt(quantityStrings[i].trim());
-            }
-            
-            boolean success = prescriptionManager.editPrescription(prescriptionId, doctor.getUserId(), 
-                                    medicineIds, quantities, dosages, remarks);
-                                    
-            JOptionPane.showMessageDialog(this, success ? "Prescription updated." : "Unable to update. Make sure it's PENDING or PREPARING.");
-            
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Error: " + ex.getMessage());
-        }
+    private void clearItems() {
+        selectedItems.clear();
+        itemListModel.clear();
+        quantityField.setText("");
+        dosageField.setText("");
+        remarksField.setText("");
     }
 
     private void cancelPrescription() {
-        String prescriptionId = JOptionPane.showInputDialog(this, "Prescription ID:");
-        if (prescriptionId == null) {
+        String rxId = JOptionPane.showInputDialog(
+            this,
+            "Enter the prescription ID to cancel:",
+            "Cancel Prescription",
+            JOptionPane.QUESTION_MESSAGE
+        );
+
+        if (rxId == null || rxId.trim().isEmpty()) {
             return;
         }
 
-        String reason = JOptionPane.showInputDialog(this, "Cancellation reason:");
-        if (reason == null) {
+        Prescription targetRx = null;
+        for (Prescription rx : prescriptionManager.getPrescriptionList()) {
+            if (rx.getPrescriptionId().equals(rxId.trim())) {
+                targetRx = rx;
+                break;
+            }
+        }
+
+        if (targetRx == null) {
+            JOptionPane.showMessageDialog(this, "Prescription not found.", "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
 
-        boolean success = prescriptionManager.cancelPrescription(prescriptionId, doctor.getUserId(), reason);
-        JOptionPane.showMessageDialog(this, success ? "Prescription cancelled." : "Unable to cancel. It may already be dispensed.");
-    }
+        // Ensure that this prescription was issued by the current doctor.
+        if (!targetRx.getPrescribingDoctor().getUserId().equals(doctor.getUserId())) {
+            JOptionPane.showMessageDialog(
+                this,
+                "You can only cancel prescriptions that you issued.",
+                "Insufficient Permission",
+                JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
 
-    private void logout() {
-        dispose();
-        new LoginFrame().setVisible(true);
+        if (!targetRx.canCancel()) {
+            JOptionPane.showMessageDialog(
+                this,
+                "This prescription is " + targetRx.getStatus() + " and cannot be cancelled.\n" +
+                "Only pending or preparing prescriptions can be cancelled.",
+                "Cancellation Unavailable",
+                JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+
+        int confirm = JOptionPane.showConfirmDialog(
+            this,
+            "Are you sure you want to cancel prescription " + rxId + "?\n" +
+            "Patient: " + targetRx.getPatient().getFullName() + "\n" +
+            "Status: " + targetRx.getStatus(),
+            "Confirm Cancellation",
+            JOptionPane.YES_NO_OPTION
+        );
+
+        if (confirm == JOptionPane.YES_OPTION) {
+            String reason = JOptionPane.showInputDialog(
+                this,
+                "Enter the cancellation reason:",
+                "Cancellation Reason",
+                JOptionPane.QUESTION_MESSAGE
+            );
+
+            if (reason == null || reason.trim().isEmpty()) {
+                reason = "Cancelled by doctor";
+            }
+
+            try {
+                prescriptionManager.cancelPrescription(targetRx, reason);
+                JOptionPane.showMessageDialog(
+                    this,
+                    "Prescription cancelled.\nReason: " + reason,
+                    "Success",
+                    JOptionPane.INFORMATION_MESSAGE
+                );
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(
+                    this,
+                    "Cancellation failed: " + e.getMessage(),
+                    "Error",
+                    JOptionPane.ERROR_MESSAGE
+                );
+            }
+        }
     }
 }

@@ -1,38 +1,23 @@
 package pharmacy.model;
 
-import pharmacy.enums.UserRole;
+import java.util.Date;
+import pharmacy.enumeration.UserRole;
 
 public class Patient extends User {
-
     private String medicalRecordNumber;
-    private String dateOfBirth;
+    private Date dateOfBirth;
     private String allergyHistory;
 
-    public Patient() {
-        setRole(UserRole.PATIENT);
-    }
-
-    public String getMedicalRecordNumber() {
-        return medicalRecordNumber;
-    }
-
-    public void setMedicalRecordNumber(String medicalRecordNumber) {
+    public Patient(String userId, String username, String password, String fullName,
+                   String contactNumber, String email, boolean isActive,
+                   String medicalRecordNumber, Date dateOfBirth, String allergyHistory) {
+        super(userId, username, password, fullName, contactNumber, email, UserRole.PATIENT, isActive);
         this.medicalRecordNumber = medicalRecordNumber;
-    }
-
-    public String getDateOfBirth() {
-        return dateOfBirth;
-    }
-
-    public void setDateOfBirth(String dateOfBirth) {
         this.dateOfBirth = dateOfBirth;
-    }
-
-    public String getAllergyHistory() {
-        return allergyHistory;
-    }
-
-    public void setAllergyHistory(String allergyHistory) {
         this.allergyHistory = allergyHistory;
     }
-} 
+
+    public String getMedicalRecordNumber() { return medicalRecordNumber; }
+    public Date getDateOfBirth() { return dateOfBirth; }
+    public String getAllergyHistory() { return allergyHistory; }
+}

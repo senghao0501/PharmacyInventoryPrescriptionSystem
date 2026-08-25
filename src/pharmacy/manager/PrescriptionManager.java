@@ -1,454 +1,262 @@
 package pharmacy.manager;
 
-import pharmacy.database.DatabaseConnection;
-import pharmacy.enums.PrescriptionStatus;
-import pharmacy.enums.UserRole;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import pharmacy.model.Doctor;
+import pharmacy.model.Patient;
+import pharmacy.model.Pharmacist;
 import pharmacy.model.Medicine;
-import pharmacy.model.User;
-
-import java.sql.*;
-import java.util.UUID;
+import pharmacy.model.Prescription;
+import pharmacy.model.PrescriptionItem;
+import pharmacy.enumeration.PrescriptionStatus;
+import pharmacy.repository.TxtDataStore;
 
 public class PrescriptionManager {
+    private List<Prescription> prescriptionList;
+    private UserManager userManager;
+    private InventoryManager inventoryManager;
+    private AlertManager alertManager;
+    private TxtDataStore dataStore;
+    private SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
-    private final InventoryManager inventoryManager = new InventoryManager();
-    private final AlertManager alertManager = new AlertManager();
-    private final UserManager userManager = new UserManager(); // 添加 UserManager 引用
+    public PrescriptionManager(UserManager userManager, InventoryManager inventoryManager,
+                               AlertManager alertManager, TxtDataStore dataStore) {
+        this.userManager = userManager;
+        this.inventoryManager = inventoryManager;
+        this.alertManager = alertManager;
+        this.dataStore = dataStore;
+        prescriptionList = new ArrayList<>();
+        loadPrescriptions();
+    }
 
-    public String createPrescription(String doctorId, String patientId, String[] medicineIds, int[] quantities, String[] dosages, String remarks) {
-        if (medicineIds == null || quantities == null || dosages == null) {
-            return null;
+    private void loadPrescriptions() {
+        List<String> prescriptionLines = dataStore.readLines("prescriptions.txt");
+
+        for (int i = 1; i < prescriptionLines.size(); i++) {
+            String[] data = prescriptionLines.get(i).split("\\|", -1);
+            try {
+                Patient patient = (Patient) userManager.findById(data[3]);
+                Doctor doctor = (Doctor) userManager.findById(data[4]);
+
+                Prescription prescription = new Prescription(data[0], patient, doctor, data[2]);
+                prescription.setPrescriptionDate(dateFormat.parse(data[1]));
+                prescription.setStatus(PrescriptionStatus.valueOf(data[5]));
+
+                if (!data[6].isEmpty()) {
+                    Pharmacist pharmacist = (Pharmacist) userManager.findById(data[6]);
+                    prescription.setDispensingPharmacist(pharmacist);
+                }
+
+                prescription.setUpdatedAt(dateFormat.parse(data[8]));
+
+                // The cancellation reason is only applicable to cancelled prescriptions.
+                if (!data[9].isEmpty() && prescription.getStatus() == PrescriptionStatus.CANCELLED) {
+                    // Retained in the persisted prescription record.
+                }
+
+                loadPrescriptionItems(prescription);
+                prescriptionList.add(prescription);
+
+            } catch (Exception e) {
+                System.out.println("Unable to load prescription: " + prescriptionLines.get(i));
+            }
         }
+    }
 
-        if (medicineIds.length == 0 || medicineIds.length != quantities.length || medicineIds.length != dosages.length) {
-            return null;
-        }
+    private void loadPrescriptionItems(Prescription prescription) {
+        List<String> lines = dataStore.readLines("prescription_items.txt");
 
-        double totalPrice = 0;
+        for (int i = 1; i < lines.size(); i++) {
+            String[] data = lines.get(i).split("\\|", -1);
+            if (!data[0].equals(prescription.getPrescriptionId())) {
+                continue;
+            }
 
-        for (int i = 0; i < medicineIds.length; i++) {
-            Medicine medicine = inventoryManager.findMedicine(medicineIds[i]);
-
+            Medicine medicine = inventoryManager.findMedicine(data[2]);
             if (medicine == null) {
-                throw new IllegalArgumentException("Medicine does not exist: " + medicineIds[i]);
+                continue;
             }
 
-            if (medicine.getStockQuantity() <= 0) {
-                throw new IllegalArgumentException(medicine.getName() + " is out of stock.");
-            }
-
-            if (quantities[i] <= 0) {
-                throw new IllegalArgumentException("Quantity must be greater than 0.");
-            }
-
-            if (quantities[i] > medicine.getStockQuantity()) {
-                throw new IllegalArgumentException("Insufficient stock for " + medicine.getName());
-            }
-
-            totalPrice += medicine.getUnitPrice() * quantities[i];
-        }
-
-        String prescriptionId = "RX-" + UUID.randomUUID().toString().substring(0, 8);
-        Connection conn = null;
-
-        try {
-            conn = DatabaseConnection.getConnection();
-            conn.setAutoCommit(false);
-
-            String prescriptionSql = "INSERT INTO prescriptions (prescription_id, status, remarks, patient_id, prescribing_doctor_id, total_price) VALUES (?, 'PENDING', ?, ?, ?, ?)";
-
-            try (PreparedStatement ps = conn.prepareStatement(prescriptionSql)) {
-                ps.setString(1, prescriptionId);
-                ps.setString(2, remarks);
-                ps.setString(3, patientId);
-                ps.setString(4, doctorId);
-                ps.setDouble(5, totalPrice);
-                ps.executeUpdate();
-            }
-
-            String itemSql = "INSERT INTO prescription_items (item_id, prescription_id, medicine_id, quantity, dosage_instructions, unit_price_at_time, subtotal) VALUES (?, ?, ?, ?, ?, ?, ?)";
-
-            for (int i = 0; i < medicineIds.length; i++) {
-                Medicine medicine = inventoryManager.findMedicine(medicineIds[i]);
-                String itemId = "ITEM-" + UUID.randomUUID().toString().substring(0, 8);
-
-                try (PreparedStatement ps = conn.prepareStatement(itemSql)) {
-                    ps.setString(1, itemId);
-                    ps.setString(2, prescriptionId);
-                    ps.setString(3, medicineIds[i]);
-                    ps.setInt(4, quantities[i]);
-                    ps.setString(5, dosages[i]);
-                    ps.setDouble(6, medicine.getUnitPrice());
-                    ps.setDouble(7, medicine.getUnitPrice() * quantities[i]);
-                    ps.executeUpdate();
-                }
-            }
-
-            conn.commit();
-            return prescriptionId;
-
-        } catch (SQLException e) {
-            if (conn != null) {
-                try {
-                    conn.rollback();
-                } catch (SQLException ignored) {
-                }
-            }
-            e.printStackTrace();
-        } finally {
-            if (conn != null) {
-                try {
-                    conn.close();
-                } catch (SQLException ignored) {
-                }
-            }
-        }
-
-        return null;
-    }
-
-    public boolean startPreparing(String prescriptionId, String pharmacistId) {
-        String sql = "UPDATE prescriptions SET status = 'PREPARING', dispensing_pharmacist_id = ?, updated_at = CURRENT_TIMESTAMP WHERE prescription_id = ? AND status = 'PENDING'";
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setString(1, pharmacistId);
-            ps.setString(2, prescriptionId);
-            return ps.executeUpdate() > 0;
-
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-
-        return false;
-    }
-
-    // 修改后的取消方法，支持医生和药剂师
-    public boolean cancelPrescription(String prescriptionId, String userId, String reason) {
-        User user = userManager.getUserById(userId);
-        if (user == null) {
-            return false;
-        }
-        
-        boolean isDoctor = user.getRole() == UserRole.DOCTOR;
-        boolean isPharmacist = user.getRole() == UserRole.PHARMACIST;
-        if (!isDoctor && !isPharmacist) {
-            return false; // 只有医生和药剂师可以取消
-        }
-
-        String sql;
-        if (isDoctor) {
-            // 医生只能取消自己开的单
-            sql = "UPDATE prescriptions SET status = 'CANCELLED', cancellation_reason = ?, updated_at = CURRENT_TIMESTAMP " +
-                  "WHERE prescription_id = ? AND status IN ('PENDING', 'PREPARING') AND prescribing_doctor_id = ?";
-        } else { // 药剂师
-            sql = "UPDATE prescriptions SET status = 'CANCELLED', cancellation_reason = ?, updated_at = CURRENT_TIMESTAMP " +
-                  "WHERE prescription_id = ? AND status IN ('PENDING', 'PREPARING')";
-        }
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            
-            ps.setString(1, reason);
-            ps.setString(2, prescriptionId);
-            if (isDoctor) {
-                ps.setString(3, userId);
-            }
-            return ps.executeUpdate() > 0;
-
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return false;
-    }
-
-    public boolean editPrescription(String prescriptionId, String userId, String[] medicineIds, int[] quantities, String[] dosages, String remarks) {
-        String status = getPrescriptionStatus(prescriptionId);
-
-        if (status == null) {
-            return false;
-        }
-
-        if (!status.equals("PENDING") && !status.equals("PREPARING")) {
-            return false;
-        }
-
-        if (!isAuthorizedEditor(prescriptionId, userId)) {
-            return false;
-        }
-
-        double totalPrice = 0;
-
-        for (int i = 0; i < medicineIds.length; i++) {
-            Medicine medicine = inventoryManager.findMedicine(medicineIds[i]);
-
-            if (medicine == null || medicine.getStockQuantity() <= 0 || quantities[i] <= 0 || quantities[i] > medicine.getStockQuantity()) {
-                return false;
-            }
-
-            totalPrice += medicine.getUnitPrice() * quantities[i];
-        }
-
-        Connection conn = null;
-
-        try {
-            conn = DatabaseConnection.getConnection();
-            conn.setAutoCommit(false);
-
-            String deleteSql = "DELETE FROM prescription_items WHERE prescription_id = ?";
-
-            try (PreparedStatement ps = conn.prepareStatement(deleteSql)) {
-                ps.setString(1, prescriptionId);
-                ps.executeUpdate();
-            }
-
-            String itemSql = "INSERT INTO prescription_items (item_id, prescription_id, medicine_id, quantity, dosage_instructions, unit_price_at_time, subtotal) VALUES (?, ?, ?, ?, ?, ?, ?)";
-
-            for (int i = 0; i < medicineIds.length; i++) {
-                Medicine medicine = inventoryManager.findMedicine(medicineIds[i]);
-
-                try (PreparedStatement ps = conn.prepareStatement(itemSql)) {
-                    ps.setString(1, "ITEM-" + UUID.randomUUID().toString().substring(0, 8));
-                    ps.setString(2, prescriptionId);
-                    ps.setString(3, medicineIds[i]);
-                    ps.setInt(4, quantities[i]);
-                    ps.setString(5, dosages[i]);
-                    ps.setDouble(6, medicine.getUnitPrice());
-                    ps.setDouble(7, medicine.getUnitPrice() * quantities[i]);
-                    ps.executeUpdate();
-                }
-            }
-
-            String updatePrescription = "UPDATE prescriptions SET remarks = ?, total_price = ?, updated_at = CURRENT_TIMESTAMP WHERE prescription_id = ?";
-
-            try (PreparedStatement ps = conn.prepareStatement(updatePrescription)) {
-                ps.setString(1, remarks);
-                ps.setDouble(2, totalPrice);
-                ps.setString(3, prescriptionId);
-                ps.executeUpdate();
-            }
-
-            conn.commit();
-            return true;
-
-        } catch (SQLException e) {
-            if (conn != null) {
-                try {
-                    conn.rollback();
-                } catch (SQLException ignored) {
-                }
-            }
-            e.printStackTrace();
-        } finally {
-            if (conn != null) {
-                try {
-                    conn.close();
-                } catch (SQLException ignored) {
-                }
-            }
-        }
-
-        return false;
-    }
-
-    private boolean isAuthorizedEditor(String prescriptionId, String userId) {
-        String sql = "SELECT prescription_id FROM prescriptions WHERE prescription_id = ? AND (prescribing_doctor_id = ? OR dispensing_pharmacist_id = ?)";
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setString(1, prescriptionId);
-            ps.setString(2, userId);
-            ps.setString(3, userId);
-            ResultSet rs = ps.executeQuery();
-            return rs.next();
-
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-
-        return false;
-    }
-
-    private String getPrescriptionStatus(String prescriptionId) {
-        String sql = "SELECT status FROM prescriptions WHERE prescription_id = ?";
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setString(1, prescriptionId);
-            ResultSet rs = ps.executeQuery();
-
-            if (rs.next()) {
-                return rs.getString("status");
-            }
-
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-
-        return null;
-    }
-
-    public boolean dispensePrescription(String prescriptionId, String pharmacistId) {
-        Connection conn = null;
-
-        try {
-            conn = DatabaseConnection.getConnection();
-            conn.setAutoCommit(false);
-
-            String checkSql = "SELECT patient_id, total_price FROM prescriptions WHERE prescription_id = ? AND status = 'PREPARING'";
-            String patientId;
-            double totalPrice;
-
-            try (PreparedStatement ps = conn.prepareStatement(checkSql)) {
-                ps.setString(1, prescriptionId);
-                ResultSet rs = ps.executeQuery();
-
-                if (!rs.next()) {
-                    conn.rollback();
-                    return false;
-                }
-
-                patientId = rs.getString("patient_id");
-                totalPrice = rs.getDouble("total_price");
-            }
-
-            String itemSql = "SELECT medicine_id, quantity FROM prescription_items WHERE prescription_id = ?";
-
-            try (PreparedStatement ps = conn.prepareStatement(itemSql)) {
-                ps.setString(1, prescriptionId);
-                ResultSet rs = ps.executeQuery();
-
-                while (rs.next()) {
-                    String medicineId = rs.getString("medicine_id");
-                    int quantity = rs.getInt("quantity");
-
-                    String stockSql = "SELECT stock_quantity FROM medicines WHERE medicine_id = ? FOR UPDATE";
-                    int stock;
-
-                    try (PreparedStatement stockPs = conn.prepareStatement(stockSql)) {
-                        stockPs.setString(1, medicineId);
-                        ResultSet stockRs = stockPs.executeQuery();
-
-                        if (!stockRs.next()) {
-                            conn.rollback();
-                            return false;
-                        }
-
-                        stock = stockRs.getInt("stock_quantity");
-                    }
-
-                    if (stock < quantity) {
-                        conn.rollback();
-                        throw new IllegalStateException("Insufficient stock during dispensing.");
-                    }
-
-                    String updateStock = "UPDATE medicines SET stock_quantity = stock_quantity - ? WHERE medicine_id = ?";
-
-                    try (PreparedStatement stockPs = conn.prepareStatement(updateStock)) {
-                        stockPs.setInt(1, quantity);
-                        stockPs.setString(2, medicineId);
-                        stockPs.executeUpdate();
-                    }
-
-                    String inventoryLog = "INSERT INTO inventory_transactions (medicine_id, transaction_type, quantity, performed_by, remarks) VALUES (?, 'DISPENSE', ?, ?, ?)";
-
-                    try (PreparedStatement logPs = conn.prepareStatement(inventoryLog)) {
-                        logPs.setString(1, medicineId);
-                        logPs.setInt(2, quantity);
-                        logPs.setString(3, pharmacistId);
-                        logPs.setString(4, "Prescription " + prescriptionId);
-                        logPs.executeUpdate();
-                    }
-                }
-            }
-
-            String updatePrescription = "UPDATE prescriptions SET status = 'READY_FOR_COLLECTION', dispensing_pharmacist_id = ?, updated_at = CURRENT_TIMESTAMP WHERE prescription_id = ?";
-
-            try (PreparedStatement ps = conn.prepareStatement(updatePrescription)) {
-                ps.setString(1, pharmacistId);
-                ps.setString(2, prescriptionId);
-                ps.executeUpdate();
-            }
-
-            conn.commit();
-            alertManager.notifyPatientReady(patientId, prescriptionId);
-            checkLowStockAfterDispensing(prescriptionId);
-            return true;
-
-        } catch (SQLException e) {
-            if (conn != null) {
-                try {
-                    conn.rollback();
-                } catch (SQLException ignored) {
-                }
-            }
-            e.printStackTrace();
-        } finally {
-            if (conn != null) {
-                try {
-                    conn.close();
-                } catch (SQLException ignored) {
-                }
-            }
-        }
-
-        return false;
-    }
-
-    private void checkLowStockAfterDispensing(String prescriptionId) {
-        String sql = "SELECT m.* FROM medicines m JOIN prescription_items pi ON m.medicine_id = pi.medicine_id WHERE pi.prescription_id = ? AND m.stock_quantity <= m.min_threshold_quantity";
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setString(1, prescriptionId);
-            ResultSet rs = ps.executeQuery();
-
-            while (rs.next()) {
-                Medicine medicine = new Medicine();
-                medicine.setMedicineId(rs.getString("medicine_id"));
-                medicine.setName(rs.getString("name"));
-                medicine.setStockQuantity(rs.getInt("stock_quantity"));
-                alertManager.notifyLowStock(medicine);
-            }
-
-        } catch (SQLException e) {
-            e.printStackTrace();
+            PrescriptionItem item = new PrescriptionItem(
+                data[1], Integer.parseInt(data[3]), data[4], medicine
+            );
+            prescription.addItem(item);
         }
     }
 
-    public boolean completeCollection(String prescriptionId, String pharmacistId) {
-        String sql = "UPDATE prescriptions SET status = 'DISPENSED', updated_at = CURRENT_TIMESTAMP WHERE prescription_id = ? AND status = 'READY_FOR_COLLECTION' AND dispensing_pharmacist_id = ?";
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setString(1, prescriptionId);
-            ps.setString(2, pharmacistId);
-
-            if (ps.executeUpdate() == 0) {
-                return false;
-            }
-
-            String transactionId = "SALE-" + UUID.randomUUID().toString().substring(0, 8);
-            String salesSql = "INSERT INTO sales_transactions (transaction_id, prescription_id, patient_id, pharmacist_id, amount) SELECT ?, prescription_id, patient_id, ?, total_price FROM prescriptions WHERE prescription_id = ?";
-
-            try (PreparedStatement salesPs = conn.prepareStatement(salesSql)) {
-                salesPs.setString(1, transactionId);
-                salesPs.setString(2, pharmacistId);
-                salesPs.setString(3, prescriptionId);
-                salesPs.executeUpdate();
-            }
-
-            return true;
-
-        } catch (SQLException e) {
-            e.printStackTrace();
+    public Prescription createPrescription(Patient patient, Doctor doctor,
+                                           List<PrescriptionItem> items, String remarks) {
+        if (patient == null) {
+            throw new IllegalArgumentException("Please select a patient.");
         }
 
-        return false;
+        if (items == null || items.isEmpty()) {
+            throw new IllegalArgumentException("A prescription must contain at least one medicine.");
+        }
+
+        // Validate the availability of every medicine.
+        for (PrescriptionItem item : items) {
+            Medicine medicine = item.getMedicine();
+            if (medicine == null) {
+                throw new IllegalArgumentException("Medicine does not exist.");
+            }
+            if (!medicine.isActive()) {
+                throw new IllegalArgumentException(medicine.getName() + " is inactive.");
+            }
+            if (!inventoryManager.hasEnoughStock(medicine.getMedicineId(), item.getQuantity())) {
+                if (medicine.getStockQuantity() <= medicine.getMinThresholdQuantity()) {
+                    alertManager.createLowStockNotification(medicine);
+                }
+                throw new IllegalArgumentException("Insufficient stock: " + medicine.getName());
+            }
+        }
+
+        // Create the prescription.
+        Prescription prescription = new Prescription(
+            "RX" + System.currentTimeMillis(),
+            patient, doctor, remarks
+        );
+
+        for (PrescriptionItem item : items) {
+            prescription.addItem(item);
+        }
+
+        prescriptionList.add(prescription);
+        savePrescriptions();
+
+        return prescription;
+    }
+
+    public List<Prescription> getPrescriptionList() {
+        return prescriptionList;
+    }
+
+    public List<Prescription> getPendingPrescriptions() {
+        List<Prescription> result = new ArrayList<>();
+        for (Prescription prescription : prescriptionList) {
+            if (prescription.getStatus() == PrescriptionStatus.PENDING) {
+                result.add(prescription);
+            }
+        }
+        return result;
+    }
+
+    public List<Prescription> getPatientPrescriptions(String patientId) {
+        List<Prescription> result = new ArrayList<>();
+        for (Prescription prescription : prescriptionList) {
+            if (prescription.getPatient().getUserId().equals(patientId)) {
+                result.add(prescription);
+            }
+        }
+        return result;
+    }
+
+    public void startPreparing(Prescription prescription, Pharmacist pharmacist) {
+        if (prescription.getStatus() != PrescriptionStatus.PENDING) {
+            throw new IllegalStateException("Only pending prescriptions can be prepared.");
+        }
+
+        prescription.setDispensingPharmacist(pharmacist);
+        prescription.setStatus(PrescriptionStatus.PREPARING);
+        savePrescriptions();
+    }
+
+    public void completeDispensing(Prescription prescription, Pharmacist pharmacist) {
+        if (prescription.getStatus() != PrescriptionStatus.PREPARING) {
+            throw new IllegalStateException("The prescription is not currently being prepared.");
+        }
+
+        // Verify that the stock is still sufficient.
+        for (PrescriptionItem item : prescription.getItems()) {
+            if (!inventoryManager.hasEnoughStock(
+                    item.getMedicine().getMedicineId(), item.getQuantity())) {
+                throw new IllegalStateException("Insufficient stock: " + item.getMedicine().getName());
+            }
+        }
+
+        // Deduct the inventory.
+        for (PrescriptionItem item : prescription.getItems()) {
+            inventoryManager.deductStock(
+                item.getMedicine().getMedicineId(),
+                item.getQuantity(),
+                pharmacist.getUserId()
+            );
+        }
+
+        prescription.setDispensingPharmacist(pharmacist);
+        prescription.setStatus(PrescriptionStatus.READY_FOR_COLLECTION);
+
+        // Notify the patient.
+        alertManager.createPrescriptionReadyNotification(prescription);
+
+        savePrescriptions();
+    }
+
+    public void confirmCollection(Prescription prescription, Pharmacist pharmacist) {
+        if (prescription.getStatus() != PrescriptionStatus.READY_FOR_COLLECTION) {
+            throw new IllegalStateException("The prescription is not ready for collection.");
+        }
+
+        prescription.setDispensingPharmacist(pharmacist);
+        prescription.setStatus(PrescriptionStatus.DISPENSED);
+        savePrescriptions();
+    }
+
+    public void cancelPrescription(Prescription prescription, String reason) {
+        if (!prescription.canCancel()) {
+            throw new IllegalStateException("A dispensed prescription cannot be cancelled.");
+        }
+        prescription.setCancellationReason(reason);
+        savePrescriptions();
+    }
+
+    private void savePrescriptions() {
+        List<String> prescriptionLines = new ArrayList<>();
+        prescriptionLines.add("prescriptionId|prescriptionDate|remarks|patientId|doctorId|status|pharmacistId|totalPrice|updatedAt|cancellationReason");
+
+        List<String> itemLines = new ArrayList<>();
+        itemLines.add("prescriptionId|itemId|medicineId|quantity|dosageInstructions|unitPriceAtTime|subtotal");
+
+        for (Prescription prescription : prescriptionList) {
+            String pharmacistId = "";
+            if (prescription.getDispensingPharmacist() != null) {
+                pharmacistId = prescription.getDispensingPharmacist().getUserId();
+            }
+
+            String cancellationReason = prescription.getCancellationReason();
+            if (cancellationReason == null) {
+                cancellationReason = "";
+            }
+
+            prescriptionLines.add(
+                prescription.getPrescriptionId() + "|" +
+                dateFormat.format(prescription.getPrescriptionDate()) + "|" +
+                prescription.getRemarks().replace("|", "/") + "|" +
+                prescription.getPatient().getUserId() + "|" +
+                prescription.getPrescribingDoctor().getUserId() + "|" +
+                prescription.getStatus() + "|" +
+                pharmacistId + "|" +
+                prescription.getTotalPrice() + "|" +
+                dateFormat.format(prescription.getUpdatedAt()) + "|" +
+                cancellationReason.replace("|", "/")
+            );
+
+            for (PrescriptionItem item : prescription.getItems()) {
+                itemLines.add(
+                    prescription.getPrescriptionId() + "|" +
+                    item.getItemId() + "|" +
+                    item.getMedicine().getMedicineId() + "|" +
+                    item.getQuantity() + "|" +
+                    item.getDosageInstructions().replace("|", "/") + "|" +
+                    item.getUnitPriceAtTime() + "|" +
+                    item.getSubtotal()
+                );
+            }
+        }
+
+        dataStore.overwrite("prescriptions.txt", prescriptionLines);
+        dataStore.overwrite("prescription_items.txt", itemLines);
     }
 }

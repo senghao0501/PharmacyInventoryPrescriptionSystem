@@ -1,96 +1,126 @@
 package pharmacy.manager;
 
-import pharmacy.database.DatabaseConnection;
-import pharmacy.enums.NotificationType;
-import pharmacy.model.Medicine;
-import pharmacy.notification.ConsoleNotification;
-import pharmacy.notification.Notification;
-
-import java.sql.*;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
-import java.util.UUID;
+import pharmacy.model.ConsoleNotification;
+import pharmacy.model.Medicine;
+import pharmacy.model.Notification;
+import pharmacy.model.Prescription;
+import pharmacy.enumeration.NotificationType;
+import pharmacy.repository.TxtDataStore;
 
 public class AlertManager {
+    private List<Notification> pendingNotifications;
+    private TxtDataStore dataStore;
+    private SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
-    public void createNotification(String recipientId, String message, NotificationType type) {
-        String notificationId = "N-" + UUID.randomUUID().toString().substring(0, 8);
-        String sql = "INSERT INTO notifications (notification_id, message, type, recipient_id) VALUES (?, ?, ?, ?)";
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setString(1, notificationId);
-            ps.setString(2, message);
-            ps.setString(3, type.name());
-            ps.setString(4, recipientId);
-            ps.executeUpdate();
-
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+    public AlertManager(TxtDataStore dataStore) {
+        this.dataStore = dataStore;
+        pendingNotifications = new ArrayList<>();
+        loadNotifications();
     }
 
-    public void notifyPatientReady(String patientId, String prescriptionId) {
-        createNotification(patientId, "Your prescription " + prescriptionId + " is ready for collection.", NotificationType.PRESCRIPTION_READY);
-    }
-
-    public void notifyLowStock(Medicine medicine) {
-        String sql = "SELECT user_id FROM users WHERE role IN ('PHARMACIST', 'ADMIN') AND is_active = TRUE";
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-
-            while (rs.next()) {
-                createNotification(rs.getString("user_id"), "Low Stock Alert: " + medicine.getName() + " has only " + medicine.getStockQuantity() + " units remaining.", NotificationType.LOW_STOCK_WARNING);
+    private void loadNotifications() {
+        List<String> lines = dataStore.readLines("notifications.txt");
+        for (int i = 1; i < lines.size(); i++) {
+            String[] data = lines.get(i).split("\\|", -1);
+            try {
+                pendingNotifications.add(new ConsoleNotification(
+                    data[0], data[1], dateFormat.parse(data[2]),
+                    NotificationType.valueOf(data[3]), data[4],
+                    Boolean.parseBoolean(data[5])
+                ));
+            } catch (Exception e) {
+                // Ignore invalid notifications.
             }
-
-        } catch (SQLException e) {
-            e.printStackTrace();
         }
     }
 
-    public List<Notification> getUnreadNotifications(String recipientId) {
-        List<Notification> notifications = new ArrayList<>();
-        String sql = "SELECT * FROM notifications WHERE recipient_id = ? AND is_read = FALSE ORDER BY timestamp DESC";
+    public void createPrescriptionReadyNotification(Prescription prescription) {
+        String message = "Your prescription " + prescription.getPrescriptionId() + " is ready for collection. Please visit the pharmacy.";
 
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+        Notification notification = new ConsoleNotification(
+            "N" + System.currentTimeMillis(),
+            message, new Date(),
+            NotificationType.PRESCRIPTION_READY,
+            prescription.getPatient().getUserId(),
+            false
+        );
 
-            ps.setString(1, recipientId);
-            ResultSet rs = ps.executeQuery();
+        pendingNotifications.add(notification);
+        saveNotifications();
+    }
 
-            while (rs.next()) {
-                Notification notification = new ConsoleNotification(
-                        rs.getString("notification_id"),
-                        rs.getString("message"),
-                        rs.getTimestamp("timestamp").toString(),
-                        NotificationType.valueOf(rs.getString("type")),
-                        rs.getString("recipient_id"),
-                        rs.getBoolean("is_read")
-                );
-                notifications.add(notification);
+    public void createLowStockNotification(Medicine medicine) {
+        String message = "Low stock warning: " + medicine.getName() +
+                         " has only " + medicine.getStockQuantity() + " units remaining. Please restock promptly.";
+
+        Notification pharmacistNotification = new ConsoleNotification(
+            "N" + System.currentTimeMillis(),
+            message, new Date(),
+            NotificationType.LOW_STOCK_WARNING,
+            "ROLE:PHARMACIST",
+            false
+        );
+
+        Notification adminNotification = new ConsoleNotification(
+            "N" + System.currentTimeMillis(),
+            message, new Date(),
+            NotificationType.LOW_STOCK_WARNING,
+            "ROLE:ADMIN",
+            false
+        );
+
+        pendingNotifications.add(pharmacistNotification);
+        pendingNotifications.add(adminNotification);
+        pharmacistNotification.display();
+        saveNotifications();
+    }
+
+    public List<Notification> getNotificationsForUser(String userId) {
+        List<Notification> result = new ArrayList<>();
+        for (Notification notification : pendingNotifications) {
+            if (notification.getRecipientId().equals(userId) && !notification.isRead()) {
+                result.add(notification);
             }
-
-        } catch (SQLException e) {
-            e.printStackTrace();
         }
-
-        return notifications;
+        return result;
     }
 
-    public void markAsRead(String notificationId) {
-        String sql = "UPDATE notifications SET is_read = TRUE WHERE notification_id = ?";
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setString(1, notificationId);
-            ps.executeUpdate();
-
-        } catch (SQLException e) {
-            e.printStackTrace();
+    public List<Notification> getNotificationsForRole(String role) {
+        List<Notification> result = new ArrayList<>();
+        String recipient = "ROLE:" + role;
+        for (Notification notification : pendingNotifications) {
+            if (notification.getRecipientId().equals(recipient) && !notification.isRead()) {
+                result.add(notification);
+            }
         }
+        return result;
+    }
+
+    public void markAsRead(Notification notification) {
+        notification.markAsRead();
+        saveNotifications();
+    }
+
+    private void saveNotifications() {
+        List<String> lines = new ArrayList<>();
+        lines.add("notificationId|message|timestamp|type|recipientId|isRead");
+
+        for (Notification notification : pendingNotifications) {
+            String safeMessage = notification.getMessage().replace("|", "/");
+            lines.add(
+                notification.getNotificationId() + "|" +
+                safeMessage + "|" +
+                dateFormat.format(notification.getTimestamp()) + "|" +
+                notification.getType() + "|" +
+                notification.getRecipientId() + "|" +
+                notification.isRead()
+            );
+        }
+
+        dataStore.overwrite("notifications.txt", lines);
     }
 }

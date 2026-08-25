@@ -1,8 +1,8 @@
-package pharmacy.enums;
+package pharmacy.enumeration;
 
 public enum UserRole {
     PATIENT,
     DOCTOR,
     PHARMACIST,
     ADMIN
-} 
+}

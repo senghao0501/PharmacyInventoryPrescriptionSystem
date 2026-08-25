@@ -1,0 +1,1 @@
+prescriptionId|prescriptionDate|remarks|patientId|doctorId|status|pharmacistId|totalPrice|updatedAt|cancellationReason

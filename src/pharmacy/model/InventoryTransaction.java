@@ -1,40 +1,29 @@
 package pharmacy.model;
 
+import java.util.Date;
+
 public class InventoryTransaction {
-
-    private int transactionId;
+    private String transactionId;
     private String medicineId;
-    private String transactionType;
     private int quantity;
-    private String transactionDate;
+    private String transactionType;
+    private Date transactionDate;
     private String performedBy;
-    private String remarks;
 
-    public int getTransactionId() {
-        return transactionId;
+    public InventoryTransaction(String transactionId, String medicineId, int quantity,
+                                String transactionType, Date transactionDate, String performedBy) {
+        this.transactionId = transactionId;
+        this.medicineId = medicineId;
+        this.quantity = quantity;
+        this.transactionType = transactionType;
+        this.transactionDate = transactionDate;
+        this.performedBy = performedBy;
     }
 
-    public String getMedicineId() {
-        return medicineId;
-    }
-
-    public String getTransactionType() {
-        return transactionType;
-    }
-
-    public int getQuantity() {
-        return quantity;
-    }
-
-    public String getTransactionDate() {
-        return transactionDate;
-    }
-
-    public String getPerformedBy() {
-        return performedBy;
-    }
-
-    public String getRemarks() {
-        return remarks;
-    }
-} 
+    public String getTransactionId() { return transactionId; }
+    public String getMedicineId() { return medicineId; }
+    public int getQuantity() { return quantity; }
+    public String getTransactionType() { return transactionType; }
+    public Date getTransactionDate() { return transactionDate; }
+    public String getPerformedBy() { return performedBy; }
+}

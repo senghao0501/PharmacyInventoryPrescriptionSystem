@@ -1,0 +1,1 @@
+transactionId|medicineId|quantity|transactionType|transactionDate|performedBy

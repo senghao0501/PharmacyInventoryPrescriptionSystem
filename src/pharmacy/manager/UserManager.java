@@ -1,204 +1,207 @@
 package pharmacy.manager;
 
-import pharmacy.database.DatabaseConnection;
-import pharmacy.enums.UserRole;
-import pharmacy.model.*;
-
-import java.sql.*;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
+import pharmacy.model.Admin;
+import pharmacy.model.Doctor;
+import pharmacy.model.Patient;
+import pharmacy.model.Pharmacist;
+import pharmacy.model.User;
+import pharmacy.enumeration.UserRole;
+import pharmacy.repository.TxtDataStore;
 
 public class UserManager {
+    private List<User> userList;
+    private TxtDataStore dataStore;
+    private SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
 
-    public User authenticate(String username, String password) {
-        String sql = "SELECT * FROM users WHERE username = ? AND password = ? AND is_active = TRUE";
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setString(1, username);
-            ps.setString(2, password);
-            ResultSet rs = ps.executeQuery();
-
-            if (rs.next()) {
-                return createUserFromResultSet(rs);
-            }
-
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-
-        return null;
+    public UserManager(TxtDataStore dataStore) {
+        this.dataStore = dataStore;
+        this.userList = new ArrayList<>();
+        loadUsers();
     }
 
-    // 新增方法：根据用户ID获取用户
-    public User getUserById(String userId) {
-        String sql = "SELECT * FROM users WHERE user_id = ?";
-        
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            
-            ps.setString(1, userId);
-            ResultSet rs = ps.executeQuery();
-            
-            if (rs.next()) {
-                return createUserFromResultSet(rs);
+    private void loadUsers() {
+        List<String> lines = dataStore.readLines("users.txt");
+        for (int i = 1; i < lines.size(); i++) {
+            String[] data = lines.get(i).split("\\|", -1);
+            if (data.length < 8) {
+                continue;
             }
-            
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return null;
-    }
 
-    private User createUserFromResultSet(ResultSet rs) throws SQLException {
-        UserRole role = UserRole.valueOf(rs.getString("role"));
-        User user;
+            try {
+                String role = data[6];
+                User user = null;
 
-        switch (role) {
-            case PATIENT:
-                Patient patient = new Patient();
-                patient.setMedicalRecordNumber(rs.getString("medical_record_number"));
-
-                Date dob = rs.getDate("date_of_birth");
-                if (dob != null) {
-                    patient.setDateOfBirth(dob.toString());
+                if (role.equals("PATIENT")) {
+                    user = new Patient(
+                        data[0], data[1], data[2], data[3],
+                        data[4], data[5], Boolean.parseBoolean(data[7]),
+                        data.length > 8 ? data[8] : "",
+                        data.length > 9 && !data[9].isEmpty() ? dateFormat.parse(data[9]) : null,
+                        data.length > 10 ? data[10] : ""
+                    );
+                } else if (role.equals("DOCTOR")) {
+                    user = new Doctor(
+                        data[0], data[1], data[2], data[3],
+                        data[4], data[5], Boolean.parseBoolean(data[7]),
+                        data.length > 8 ? data[8] : "",
+                        data.length > 9 ? data[9] : "",
+                        data.length > 10 ? data[10] : ""
+                    );
+                } else if (role.equals("PHARMACIST")) {
+                    user = new Pharmacist(
+                        data[0], data[1], data[2], data[3],
+                        data[4], data[5], Boolean.parseBoolean(data[7]),
+                        data.length > 8 ? data[8] : "",
+                        data.length > 9 ? data[9] : ""
+                    );
+                } else if (role.equals("ADMIN")) {
+                    user = new Admin(
+                        data[0], data[1], data[2], data[3],
+                        data[4], data[5], Boolean.parseBoolean(data[7]),
+                        data.length > 8 ? data[8] : ""
+                    );
                 }
 
-                patient.setAllergyHistory(rs.getString("allergy_history"));
-                user = patient;
-                break;
-
-            case DOCTOR:
-                Doctor doctor = new Doctor();
-                doctor.setLicenseNumber(rs.getString("license_number"));
-                doctor.setSpecialization(rs.getString("specialization"));
-                doctor.setDepartment(rs.getString("department"));
-                user = doctor;
-                break;
-
-            case PHARMACIST:
-                Pharmacist pharmacist = new Pharmacist();
-                pharmacist.setPharmacistLicenseId(rs.getString("pharmacist_license_id"));
-                pharmacist.setShiftSchedule(rs.getString("shift_schedule"));
-                user = pharmacist;
-                break;
-
-            case ADMIN:
-                Admin admin = new Admin();
-                admin.setAdminAccessLevel(rs.getString("admin_access_level"));
-                user = admin;
-                break;
-
-            default:
-                throw new SQLException("Unknown role.");
+                if (user != null) {
+                    userList.add(user);
+                }
+            } catch (Exception e) {
+                System.out.println("Unable to load user: " + lines.get(i));
+            }
         }
-
-        user.setUserId(rs.getString("user_id"));
-        user.setUsername(rs.getString("username"));
-        user.setPassword(rs.getString("password"));
-        user.setFullName(rs.getString("full_name"));
-        user.setContactNumber(rs.getString("contact_number"));
-        user.setEmail(rs.getString("email"));
-        user.setRole(role);
-        user.setActive(rs.getBoolean("is_active"));
-
-        return user;
     }
 
-    public List<User> getAllUsers() {
-        List<User> users = new ArrayList<>();
-        String sql = "SELECT * FROM users ORDER BY role, user_id";
+    public List<User> getUserList() {
+        return userList;
+    }
 
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
+    public List<Patient> getPatients() {
+        List<Patient> result = new ArrayList<>();
+        for (User user : userList) {
+            if (user instanceof Patient) {
+                result.add((Patient) user);
+            }
+        }
+        return result;
+    }
 
-            while (rs.next()) {
-                users.add(createUserFromResultSet(rs));
+    public List<Doctor> getDoctors() {
+        List<Doctor> result = new ArrayList<>();
+        for (User user : userList) {
+            if (user instanceof Doctor) {
+                result.add((Doctor) user);
+            }
+        }
+        return result;
+    }
+
+    public List<Pharmacist> getPharmacists() {
+        List<Pharmacist> result = new ArrayList<>();
+        for (User user : userList) {
+            if (user instanceof Pharmacist) {
+                result.add((Pharmacist) user);
+            }
+        }
+        return result;
+    }
+
+    public User findByUsername(String username) {
+        for (User user : userList) {
+            if (user.getUsername().equalsIgnoreCase(username)) {
+                return user;
+            }
+        }
+        return null;
+    }
+
+    public User findById(String userId) {
+        for (User user : userList) {
+            if (user.getUserId().equals(userId)) {
+                return user;
+            }
+        }
+        return null;
+    }
+
+    public void disableUser(String userId) {
+        User user = findById(userId);
+        if (user == null) {
+            throw new IllegalArgumentException("User does not exist.");
+        }
+        user.setActive(false);
+        saveUsers();
+    }
+
+    public void enableUser(String userId) {
+        User user = findById(userId);
+        if (user == null) {
+            throw new IllegalArgumentException("User does not exist.");
+        }
+        user.setActive(true);
+        saveUsers();
+    }
+
+    public void resetPassword(String userId, String newPassword) {
+        User user = findById(userId);
+        if (user == null) {
+            throw new IllegalArgumentException("User does not exist.");
+        }
+        user.setPassword(newPassword);
+        saveUsers();
+    }
+
+    public void addUser(User user) {
+        if (findByUsername(user.getUsername()) != null) {
+            throw new IllegalArgumentException("Username already exists.");
+        }
+        userList.add(user);
+        saveUsers();
+    }
+
+    private void saveUsers() {
+        List<String> lines = new ArrayList<>();
+        lines.add("userId|username|password|fullName|contactNumber|email|role|active|extra1|extra2|extra3");
+
+        for (User user : userList) {
+            String extra1 = "", extra2 = "", extra3 = "";
+
+            if (user instanceof Patient) {
+                Patient patient = (Patient) user;
+                extra1 = patient.getMedicalRecordNumber();
+                extra2 = patient.getDateOfBirth() == null ? "" : dateFormat.format(patient.getDateOfBirth());
+                extra3 = patient.getAllergyHistory();
+            } else if (user instanceof Doctor) {
+                Doctor doctor = (Doctor) user;
+                extra1 = doctor.getLicenseNumber();
+                extra2 = doctor.getSpecialization();
+                extra3 = doctor.getDepartment();
+            } else if (user instanceof Pharmacist) {
+                Pharmacist pharmacist = (Pharmacist) user;
+                extra1 = pharmacist.getPharmacistLicenseId();
+                extra2 = pharmacist.getShiftSchedule();
+            } else if (user instanceof Admin) {
+                Admin admin = (Admin) user;
+                extra1 = admin.getAdminAccessLevel();
             }
 
-        } catch (SQLException e) {
-            e.printStackTrace();
+            lines.add(
+                user.getUserId() + "|" +
+                user.getUsername() + "|" +
+                user.getPassword() + "|" +
+                user.getFullName() + "|" +
+                user.getContactNumber() + "|" +
+                user.getEmail() + "|" +
+                user.getRole() + "|" +
+                user.isActive() + "|" +
+                extra1 + "|" +
+                extra2 + "|" +
+                extra3
+            );
         }
 
-        return users;
-    }
-
-    public boolean addUser(String userId, String username, String password, String fullName, String email, UserRole role) {
-        String sql = "INSERT INTO users (user_id, username, password, full_name, email, role) VALUES (?, ?, ?, ?, ?, ?)";
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setString(1, userId);
-            ps.setString(2, username);
-            ps.setString(3, password);
-            ps.setString(4, fullName);
-            ps.setString(5, email);
-            ps.setString(6, role.name());
-            return ps.executeUpdate() > 0;
-
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-
-        return false;
-    }
-
-    public boolean setUserActive(String userId, boolean active) {
-        String sql = "UPDATE users SET is_active = ? WHERE user_id = ?";
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setBoolean(1, active);
-            ps.setString(2, userId);
-            return ps.executeUpdate() > 0;
-
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-
-        return false;
-    }
-
-    public boolean resetPassword(String userId, String newPassword) {
-        String sql = "UPDATE users SET password = ? WHERE user_id = ?";
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setString(1, newPassword);
-            ps.setString(2, userId);
-            return ps.executeUpdate() > 0;
-
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-
-        return false;
-    }
-
-    public List<User> searchPatients(String keyword) {
-        List<User> patients = new ArrayList<>();
-        String sql = "SELECT * FROM users WHERE role = 'PATIENT' AND is_active = TRUE AND (user_id LIKE ? OR full_name LIKE ?)";
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setString(1, "%" + keyword + "%");
-            ps.setString(2, "%" + keyword + "%");
-            ResultSet rs = ps.executeQuery();
-
-            while (rs.next()) {
-                patients.add(createUserFromResultSet(rs));
-            }
-
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-
-        return patients;
+        dataStore.overwrite("users.txt", lines);
     }
 }

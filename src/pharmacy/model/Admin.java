@@ -1,20 +1,16 @@
 package pharmacy.model;
 
-import pharmacy.enums.UserRole;
+import pharmacy.enumeration.UserRole;
 
 public class Admin extends User {
-
     private String adminAccessLevel;
 
-    public Admin() {
-        setRole(UserRole.ADMIN);
-    }
-
-    public String getAdminAccessLevel() {
-        return adminAccessLevel;
-    }
-
-    public void setAdminAccessLevel(String adminAccessLevel) {
+    public Admin(String userId, String username, String password, String fullName,
+                 String contactNumber, String email, boolean isActive,
+                 String adminAccessLevel) {
+        super(userId, username, password, fullName, contactNumber, email, UserRole.ADMIN, isActive);
         this.adminAccessLevel = adminAccessLevel;
     }
-} 
+
+    public String getAdminAccessLevel() { return adminAccessLevel; }
+}

@@ -1,0 +1,1 @@
+notificationId|message|timestamp|type|recipientId|isRead

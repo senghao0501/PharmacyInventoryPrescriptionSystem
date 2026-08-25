@@ -1,187 +1,287 @@
 package pharmacy.gui;
 
+import java.awt.BorderLayout;
+import java.awt.GridLayout;
+import java.util.List;
+import javax.swing.BorderFactory;
+import javax.swing.DefaultListModel;
+import javax.swing.JButton;
+import javax.swing.JComboBox;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JList;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextField;
+
+import pharmacy.manager.AlertManager;
 import pharmacy.manager.InventoryManager;
 import pharmacy.manager.PrescriptionManager;
 import pharmacy.manager.ReportManager;
 import pharmacy.model.Medicine;
 import pharmacy.model.Pharmacist;
-
-import javax.swing.*;
-import java.awt.*;
-import java.time.LocalDate;
-import java.util.List;
+import pharmacy.model.Pharmacy;
+import pharmacy.model.Prescription;
+import pharmacy.model.Notification;
 
 public class PharmacistFrame extends JFrame {
+    private Pharmacist pharmacist;
+    private InventoryManager inventoryManager;
+    private PrescriptionManager prescriptionManager;
+    private AlertManager alertManager;
+    private ReportManager reportManager;
 
-    private final Pharmacist pharmacist;
-    private final PrescriptionManager prescriptionManager = new PrescriptionManager();
-    private final InventoryManager inventoryManager = new InventoryManager();
-    private final ReportManager reportManager = new ReportManager();
-    private final JTextArea output = new JTextArea();
+    private JComboBox<Pharmacy> pharmacyComboBox;
+    private DefaultListModel<String> medicineListModel;
+    private DefaultListModel<String> prescriptionListModel;
+    private JList<String> prescriptionList;
+    private JTextField restockQuantityField;
 
-    public PharmacistFrame(Pharmacist pharmacist) {
+    public PharmacistFrame(Pharmacist pharmacist, InventoryManager inventoryManager,
+                           PrescriptionManager prescriptionManager,
+                           AlertManager alertManager, ReportManager reportManager) {
         this.pharmacist = pharmacist;
-        setTitle("Pharmacist Dashboard - " + pharmacist.getFullName());
-        setSize(900, 650);
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        this.inventoryManager = inventoryManager;
+        this.prescriptionManager = prescriptionManager;
+        this.alertManager = alertManager;
+        this.reportManager = reportManager;
+
+        setTitle("Pharmacist Workspace - " + pharmacist.getFullName());
+        setSize(1000, 700);
         setLocationRelativeTo(null);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+
         buildUI();
+        showNotifications();
     }
 
     private void buildUI() {
-        JPanel panel = new JPanel(new GridLayout(2, 5, 5, 5));
+        JPanel mainPanel = new JPanel(new BorderLayout(10, 10));
+        mainPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
 
-        JButton pending = new JButton("Pending Prescriptions");
-        JButton preparing = new JButton("Start Preparing");
-        JButton dispense = new JButton("Dispense");
-        JButton collection = new JButton("Confirm Collection");
-        JButton cancel = new JButton("Cancel Prescription");
-        JButton inventory = new JButton("Inventory");
-        JButton addStock = new JButton("Add Stock");
-        JButton report = new JButton("Reports");
-        JButton logout = new JButton("Logout");
+        // Top: pharmacy selection and restocking
+        JPanel topPanel = new JPanel(new GridLayout(2, 2, 10, 10));
 
-        panel.add(pending);
-        panel.add(preparing);
-        panel.add(dispense);
-        panel.add(collection);
-        panel.add(cancel);
-        panel.add(inventory);
-        panel.add(addStock);
-        panel.add(report);
-        panel.add(logout);
-
-        add(panel, BorderLayout.NORTH);
-
-        output.setEditable(false);
-        add(new JScrollPane(output), BorderLayout.CENTER);
-
-        pending.addActionListener(e -> showPending());
-        preparing.addActionListener(e -> startPreparing());
-        dispense.addActionListener(e -> dispense());
-        collection.addActionListener(e -> completeCollection());
-        cancel.addActionListener(e -> cancelPrescription());
-        inventory.addActionListener(e -> showInventory());
-        addStock.addActionListener(e -> addStock());
-        report.addActionListener(e -> showReports());
-        logout.addActionListener(e -> logout());
-    }
-
-    private void showPending() {
-        String sql = "SELECT prescription_id, patient_id, prescribing_doctor_id, total_price FROM prescriptions WHERE status = 'PENDING' ORDER BY prescription_date";
-
-        try (var conn = pharmacy.database.DatabaseConnection.getConnection();
-             var ps = conn.prepareStatement(sql);
-             var rs = ps.executeQuery()) {
-
-            output.setText("===== PENDING PRESCRIPTIONS =====\n\n");
-
-            while (rs.next()) {
-                output.append(rs.getString("prescription_id") + " | Patient: " + rs.getString("patient_id") + " | Doctor: " + rs.getString("prescribing_doctor_id") + " | RM " + rs.getDouble("total_price") + "\n");
+        topPanel.add(new JLabel("Select Pharmacy:"));
+        pharmacyComboBox = new JComboBox<>();
+        for (Pharmacy pharmacy : inventoryManager.getPharmacies()) {
+            if (pharmacy.isActive()) {
+                pharmacyComboBox.addItem(pharmacy);
             }
+        }
+        topPanel.add(pharmacyComboBox);
 
-        } catch (Exception e) {
-            e.printStackTrace();
+        topPanel.add(new JLabel("Restock Quantity:"));
+        restockQuantityField = new JTextField();
+        topPanel.add(restockQuantityField);
+
+        mainPanel.add(topPanel, BorderLayout.NORTH);
+
+        // Centre: inventory and prescriptions
+        JPanel centerPanel = new JPanel(new GridLayout(1, 2, 10, 10));
+
+        // Left: medicine inventory
+        medicineListModel = new DefaultListModel<>();
+        JList<String> medicineList = new JList<>(medicineListModel);
+        refreshMedicines();
+        centerPanel.add(new JScrollPane(medicineList));
+
+        // Right: prescription list
+        prescriptionListModel = new DefaultListModel<>();
+        prescriptionList = new JList<>(prescriptionListModel);
+        refreshPrescriptions();
+        centerPanel.add(new JScrollPane(prescriptionList));
+
+        mainPanel.add(centerPanel, BorderLayout.CENTER);
+
+        // Bottom: actions
+        JPanel buttonPanel = new JPanel();
+
+        JButton addStockButton = new JButton("Restock");
+        JButton startButton = new JButton("Start Preparing");
+        JButton completeButton = new JButton("Complete Dispensing");
+        JButton collectionButton = new JButton("Confirm Collection");
+        JButton inventoryReportButton = new JButton("Inventory Report");
+        JButton salesReportButton = new JButton("Sales Report");
+
+        buttonPanel.add(addStockButton);
+        buttonPanel.add(startButton);
+        buttonPanel.add(completeButton);
+        buttonPanel.add(collectionButton);
+        buttonPanel.add(inventoryReportButton);
+        buttonPanel.add(salesReportButton);
+
+        mainPanel.add(buttonPanel, BorderLayout.SOUTH);
+
+        addStockButton.addActionListener(e -> addStock(medicineList));
+        startButton.addActionListener(e -> startPreparing());
+        completeButton.addActionListener(e -> completeDispensing());
+        collectionButton.addActionListener(e -> confirmCollection());
+        inventoryReportButton.addActionListener(e -> showInventoryReport());
+        salesReportButton.addActionListener(e -> showSalesReport());
+
+        add(mainPanel);
+    }
+
+    private void refreshMedicines() {
+        medicineListModel.clear();
+        for (Medicine medicine : inventoryManager.getMedicineInventory()) {
+            String status = medicine.isLowStock() ? " ⚠️ Low Stock" : "";
+            medicineListModel.addElement(
+                medicine.getMedicineId() + " | " + medicine.getName() +
+                " | Stock: " + medicine.getStockQuantity() +
+                " | RM" + medicine.getUnitPrice() + status
+            );
         }
     }
 
-    private void startPreparing() {
-        String prescriptionId = JOptionPane.showInputDialog(this, "Prescription ID:");
-        if (prescriptionId == null) {
-            return;
-        }
+    private void refreshPrescriptions() {
+        prescriptionListModel.clear();
+        List<Prescription> prescriptions = prescriptionManager.getPrescriptionList();
 
-        boolean success = prescriptionManager.startPreparing(prescriptionId, pharmacist.getUserId());
-        JOptionPane.showMessageDialog(this, success ? "Prescription is now Preparing." : "Unable to start preparing.");
+        for (Prescription rx : prescriptions) {
+            if (rx.getStatus() == pharmacy.enumeration.PrescriptionStatus.PENDING ||
+                rx.getStatus() == pharmacy.enumeration.PrescriptionStatus.PREPARING ||
+                rx.getStatus() == pharmacy.enumeration.PrescriptionStatus.READY_FOR_COLLECTION) {
+
+                String statusSymbol = "";
+                switch (rx.getStatus()) {
+                    case PENDING: statusSymbol = "⏳"; break;
+                    case PREPARING: statusSymbol = "⚙️"; break;
+                    case READY_FOR_COLLECTION: statusSymbol = "✅"; break;
+                    default: break;
+                }
+
+                prescriptionListModel.addElement(
+                    statusSymbol + " " + rx.getPrescriptionId() +
+                    " | Patient: " + rx.getPatient().getFullName() +
+                    " | Status: " + rx.getStatus() +
+                    " | Medicines: " + rx.getItems().size()
+                );
+            }
+        }
     }
 
-    private void dispense() {
-        String prescriptionId = JOptionPane.showInputDialog(this, "Prescription ID:");
-        if (prescriptionId == null) {
+    private void addStock(JList<String> medicineList) {
+        int index = medicineList.getSelectedIndex();
+        if (index < 0) {
+            JOptionPane.showMessageDialog(this, "Please select a medicine first.");
             return;
         }
+
+        Medicine medicine = inventoryManager.getMedicineInventory().get(index);
 
         try {
-            boolean success = prescriptionManager.dispensePrescription(prescriptionId, pharmacist.getUserId());
-            JOptionPane.showMessageDialog(this, success ? "Dispensing completed.\nPatient has been notified." : "Dispensing failed.");
+            int quantity = Integer.parseInt(restockQuantityField.getText().trim());
+            if (quantity <= 0) {
+                throw new IllegalArgumentException("Quantity must be greater than zero.");
+            }
+
+            inventoryManager.addStock(medicine.getMedicineId(), quantity, pharmacist.getUserId());
+            refreshMedicines();
+            restockQuantityField.setText("");
+
+            JOptionPane.showMessageDialog(this, "Restocking successful!\n" +
+                medicine.getName() + " increased by " + quantity + " units.");
+
+        } catch (NumberFormatException e) {
+            JOptionPane.showMessageDialog(this, "Please enter a valid quantity.");
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this, e.getMessage());
         }
     }
 
-    private void completeCollection() {
-        String prescriptionId = JOptionPane.showInputDialog(this, "Prescription ID:");
-        if (prescriptionId == null) {
-            return;
+    private Prescription getSelectedPrescription() {
+        int index = prescriptionList.getSelectedIndex();
+        if (index < 0) {
+            return null;
         }
 
-        boolean success = prescriptionManager.completeCollection(prescriptionId, pharmacist.getUserId());
-        JOptionPane.showMessageDialog(this, success ? "Collection confirmed.\nSales transaction recorded." : "Unable to confirm collection.");
+        List<Prescription> prescriptions = prescriptionManager.getPrescriptionList();
+        int count = 0;
+        for (Prescription rx : prescriptions) {
+            if (rx.getStatus() == pharmacy.enumeration.PrescriptionStatus.PENDING ||
+                rx.getStatus() == pharmacy.enumeration.PrescriptionStatus.PREPARING ||
+                rx.getStatus() == pharmacy.enumeration.PrescriptionStatus.READY_FOR_COLLECTION) {
+                if (count == index) {
+                    return rx;
+                }
+                count++;
+            }
+        }
+        return null;
     }
 
-    // 新增：药剂师取消处方
-    private void cancelPrescription() {
-        String prescriptionId = JOptionPane.showInputDialog(this, "Prescription ID:");
-        if (prescriptionId == null) {
-            return;
-        }
-        
-        String reason = JOptionPane.showInputDialog(this, "Cancellation reason:");
-        if (reason == null) {
-            return;
-        }
-        
-        boolean success = prescriptionManager.cancelPrescription(prescriptionId, pharmacist.getUserId(), reason);
-        JOptionPane.showMessageDialog(this, success ? "Prescription cancelled." : "Unable to cancel. It may already be dispensed.");
-    }
-
-    private void showInventory() {
-        List<Medicine> medicines = inventoryManager.getAllMedicines();
-        output.setText("===== INVENTORY =====\n\n");
-
-        for (Medicine medicine : medicines) {
-            output.append(medicine.toString() + "\n");
-        }
-    }
-
-    private void addStock() {
-        String medicineId = JOptionPane.showInputDialog(this, "Medicine ID:");
-        if (medicineId == null) {
-            return;
-        }
-
-        String quantityText = JOptionPane.showInputDialog(this, "Quantity to add:");
-        if (quantityText == null) {
+    private void startPreparing() {
+        Prescription prescription = getSelectedPrescription();
+        if (prescription == null) {
+            JOptionPane.showMessageDialog(this, "Please select a prescription.");
             return;
         }
 
         try {
-            int quantity = Integer.parseInt(quantityText);
-            boolean success = inventoryManager.increaseStock(medicineId, quantity, pharmacist.getUserId());
-            JOptionPane.showMessageDialog(this, success ? "Stock updated." : "Unable to update stock.");
-        } catch (NumberFormatException e) {
-            JOptionPane.showMessageDialog(this, "Invalid quantity.");
+            prescriptionManager.startPreparing(prescription, pharmacist);
+            refreshPrescriptions();
+            JOptionPane.showMessageDialog(this, "Medication preparation started.");
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, e.getMessage());
         }
     }
 
-    private void showReports() {
-        String[] options = {"Inventory Report", "Sales Report"};
-        int choice = JOptionPane.showOptionDialog(this, "Select report:", "Reports", JOptionPane.DEFAULT_OPTION, JOptionPane.INFORMATION_MESSAGE, null, options, options[0]);
+    private void completeDispensing() {
+        Prescription prescription = getSelectedPrescription();
+        if (prescription == null) {
+            JOptionPane.showMessageDialog(this, "Please select a prescription.");
+            return;
+        }
 
-        if (choice == 0) {
-            output.setText(reportManager.generateInventoryReport().generateReport());
-        } else if (choice == 1) {
-            String start = JOptionPane.showInputDialog(this, "Start date (YYYY-MM-DD):", LocalDate.now().minusDays(30).toString());
-            String end = JOptionPane.showInputDialog(this, "End date (YYYY-MM-DD):", LocalDate.now().toString());
-
-            if (start != null && end != null) {
-                output.setText(reportManager.generateSalesReport(start, end).generateReport());
-            }
+        try {
+            prescriptionManager.completeDispensing(prescription, pharmacist);
+            refreshPrescriptions();
+            refreshMedicines();
+            JOptionPane.showMessageDialog(this, "Dispensing completed. The patient may collect the medication.");
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, e.getMessage());
         }
     }
 
-    private void logout() {
-        dispose();
-        new LoginFrame().setVisible(true);
+    private void confirmCollection() {
+        Prescription prescription = getSelectedPrescription();
+        if (prescription == null) {
+            JOptionPane.showMessageDialog(this, "Please select a prescription.");
+            return;
+        }
+
+        try {
+            prescriptionManager.confirmCollection(prescription, pharmacist);
+            refreshPrescriptions();
+            JOptionPane.showMessageDialog(this, "Collection confirmed. The prescription is complete.");
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, e.getMessage());
+        }
+    }
+
+    private void showInventoryReport() {
+        String report = reportManager.generateInventoryReport(inventoryManager).generate();
+        JOptionPane.showMessageDialog(this, report, "Inventory Report", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private void showSalesReport() {
+        String report = reportManager.generateSalesReport(prescriptionManager).generate();
+        JOptionPane.showMessageDialog(this, report, "Sales Report", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private void showNotifications() {
+        List<Notification> notifications = alertManager.getNotificationsForRole("PHARMACIST");
+        for (Notification notification : notifications) {
+            JOptionPane.showMessageDialog(
+                this,
+                notification.getMessage(),
+                "Pharmacist Notifications",
+                JOptionPane.WARNING_MESSAGE
+            );
+            alertManager.markAsRead(notification);
+        }
     }
 }

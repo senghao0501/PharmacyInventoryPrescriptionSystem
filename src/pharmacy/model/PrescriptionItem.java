@@ -1,7 +1,6 @@
 package pharmacy.model;
 
 public class PrescriptionItem {
-
     private String itemId;
     private int quantity;
     private String dosageInstructions;
@@ -9,51 +8,19 @@ public class PrescriptionItem {
     private double unitPriceAtTime;
     private double subtotal;
 
-    public String getItemId() {
-        return itemId;
-    }
-
-    public void setItemId(String itemId) {
+    public PrescriptionItem(String itemId, int quantity, String dosageInstructions, Medicine medicine) {
         this.itemId = itemId;
-    }
-
-    public int getQuantity() {
-        return quantity;
-    }
-
-    public void setQuantity(int quantity) {
         this.quantity = quantity;
-    }
-
-    public String getDosageInstructions() {
-        return dosageInstructions;
-    }
-
-    public void setDosageInstructions(String dosageInstructions) {
         this.dosageInstructions = dosageInstructions;
-    }
-
-    public Medicine getMedicine() {
-        return medicine;
-    }
-
-    public void setMedicine(Medicine medicine) {
         this.medicine = medicine;
+        this.unitPriceAtTime = medicine.getUnitPrice();
+        this.subtotal = quantity * unitPriceAtTime;
     }
 
-    public double getUnitPriceAtTime() {
-        return unitPriceAtTime;
-    }
-
-    public void setUnitPriceAtTime(double unitPriceAtTime) {
-        this.unitPriceAtTime = unitPriceAtTime;
-    }
-
-    public double getSubtotal() {
-        return subtotal;
-    }
-
-    public void setSubtotal(double subtotal) {
-        this.subtotal = subtotal;
-    }
-} 
+    public String getItemId() { return itemId; }
+    public int getQuantity() { return quantity; }
+    public String getDosageInstructions() { return dosageInstructions; }
+    public Medicine getMedicine() { return medicine; }
+    public double getUnitPriceAtTime() { return unitPriceAtTime; }
+    public double getSubtotal() { return subtotal; }
+}

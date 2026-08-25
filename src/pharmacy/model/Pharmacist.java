@@ -1,29 +1,19 @@
 package pharmacy.model;
 
-import pharmacy.enums.UserRole;
+import pharmacy.enumeration.UserRole;
 
 public class Pharmacist extends User {
-
     private String pharmacistLicenseId;
     private String shiftSchedule;
 
-    public Pharmacist() {
-        setRole(UserRole.PHARMACIST);
-    }
-
-    public String getPharmacistLicenseId() {
-        return pharmacistLicenseId;
-    }
-
-    public void setPharmacistLicenseId(String pharmacistLicenseId) {
+    public Pharmacist(String userId, String username, String password, String fullName,
+                      String contactNumber, String email, boolean isActive,
+                      String pharmacistLicenseId, String shiftSchedule) {
+        super(userId, username, password, fullName, contactNumber, email, UserRole.PHARMACIST, isActive);
         this.pharmacistLicenseId = pharmacistLicenseId;
-    }
-
-    public String getShiftSchedule() {
-        return shiftSchedule;
-    }
-
-    public void setShiftSchedule(String shiftSchedule) {
         this.shiftSchedule = shiftSchedule;
     }
-} 
+
+    public String getPharmacistLicenseId() { return pharmacistLicenseId; }
+    public String getShiftSchedule() { return shiftSchedule; }
+}

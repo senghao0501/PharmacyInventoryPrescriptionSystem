@@ -1,86 +1,61 @@
 package pharmacy.model;
 
-import pharmacy.enums.MedicineCategory;
+import java.util.Date;
+import pharmacy.enumeration.MedicineCategory;
 
 public class Medicine {
-
     private String medicineId;
     private String name;
     private MedicineCategory category;
     private double unitPrice;
     private int stockQuantity;
     private int minThresholdQuantity;
-    private String expiryDate;
-    private boolean active;
+    private Date expiryDate;
+    private boolean isActive;
 
-    public String getMedicineId() {
-        return medicineId;
-    }
-
-    public void setMedicineId(String medicineId) {
+    public Medicine(String medicineId, String name, MedicineCategory category,
+                    double unitPrice, int stockQuantity, int minThresholdQuantity,
+                    Date expiryDate, boolean isActive) {
         this.medicineId = medicineId;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
         this.name = name;
-    }
-
-    public MedicineCategory getCategory() {
-        return category;
-    }
-
-    public void setCategory(MedicineCategory category) {
         this.category = category;
-    }
-
-    public double getUnitPrice() {
-        return unitPrice;
-    }
-
-    public void setUnitPrice(double unitPrice) {
         this.unitPrice = unitPrice;
-    }
-
-    public int getStockQuantity() {
-        return stockQuantity;
-    }
-
-    public void setStockQuantity(int stockQuantity) {
         this.stockQuantity = stockQuantity;
-    }
-
-    public int getMinThresholdQuantity() {
-        return minThresholdQuantity;
-    }
-
-    public void setMinThresholdQuantity(int minThresholdQuantity) {
         this.minThresholdQuantity = minThresholdQuantity;
-    }
-
-    public String getExpiryDate() {
-        return expiryDate;
-    }
-
-    public void setExpiryDate(String expiryDate) {
         this.expiryDate = expiryDate;
+        this.isActive = isActive;
     }
 
-    public boolean isActive() {
-        return active;
+    public String getMedicineId() { return medicineId; }
+    public String getName() { return name; }
+    public MedicineCategory getCategory() { return category; }
+    public double getUnitPrice() { return unitPrice; }
+    public int getStockQuantity() { return stockQuantity; }
+    public int getMinThresholdQuantity() { return minThresholdQuantity; }
+    public Date getExpiryDate() { return expiryDate; }
+    public boolean isActive() { return isActive; }
+
+    public void addStock(int quantity) {
+        if (quantity <= 0) {
+            throw new IllegalArgumentException("Quantity must be greater than zero.");
+        }
+        stockQuantity += quantity;
     }
 
-    public void setActive(boolean active) {
-        this.active = active;
+    public boolean removeStock(int quantity) {
+        if (quantity <= 0 || quantity > stockQuantity) {
+            return false;
+        }
+        stockQuantity -= quantity;
+        return true;
+    }
+
+    public boolean isLowStock() {
+        return stockQuantity <= minThresholdQuantity;
     }
 
     @Override
     public String toString() {
-        return medicineId + " - " + name
-                + " | Stock: " + stockQuantity
-                + " | RM " + unitPrice;
+        return medicineId + " - " + name + " | Stock: " + stockQuantity;
     }
-} 
+}

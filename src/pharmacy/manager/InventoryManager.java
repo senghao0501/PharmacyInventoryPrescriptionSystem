@@ -1,170 +1,184 @@
 package pharmacy.manager;
 
-import pharmacy.database.DatabaseConnection;
-import pharmacy.enums.MedicineCategory;
-import pharmacy.model.Medicine;
-
-import java.sql.*;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import pharmacy.model.InventoryTransaction;
+import pharmacy.model.Medicine;
+import pharmacy.model.Pharmacy;
+import pharmacy.enumeration.MedicineCategory;
+import pharmacy.repository.TxtDataStore;
 
 public class InventoryManager {
+    private List<Medicine> medicineInventory;
+    private List<Pharmacy> pharmacies;
+    private List<InventoryTransaction> transactionHistory;
+    private TxtDataStore dataStore;
+    private SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
-    private final AlertManager alertManager = new AlertManager();
+    public InventoryManager(TxtDataStore dataStore) {
+        this.dataStore = dataStore;
+        medicineInventory = new ArrayList<>();
+        pharmacies = new ArrayList<>();
+        transactionHistory = new ArrayList<>();
+        loadMedicines();
+        loadPharmacies();
+        loadTransactions();
+    }
+
+    private void loadMedicines() {
+        List<String> lines = dataStore.readLines("medicines.txt");
+        for (int i = 1; i < lines.size(); i++) {
+            String[] data = lines.get(i).split("\\|", -1);
+            try {
+                Date expiry = new SimpleDateFormat("yyyy-MM-dd").parse(data[6]);
+                Medicine medicine = new Medicine(
+                    data[0], data[1], MedicineCategory.valueOf(data[2]),
+                    Double.parseDouble(data[3]), Integer.parseInt(data[4]),
+                    Integer.parseInt(data[5]), expiry, Boolean.parseBoolean(data[7])
+                );
+                medicineInventory.add(medicine);
+            } catch (Exception e) {
+                System.out.println("Invalid medicine data: " + lines.get(i));
+            }
+        }
+    }
+
+    private void loadPharmacies() {
+        List<String> lines = dataStore.readLines("pharmacies.txt");
+        for (int i = 1; i < lines.size(); i++) {
+            String[] data = lines.get(i).split("\\|", -1);
+            if (data.length < 4) continue;
+            pharmacies.add(new Pharmacy(data[0], data[1], data[2], Boolean.parseBoolean(data[3])));
+        }
+    }
+
+    private void loadTransactions() {
+        List<String> lines = dataStore.readLines("inventory_transactions.txt");
+        for (int i = 1; i < lines.size(); i++) {
+            String[] data = lines.get(i).split("\\|", -1);
+            try {
+                transactionHistory.add(new InventoryTransaction(
+                    data[0], data[1], Integer.parseInt(data[2]),
+                    data[3], dateFormat.parse(data[4]), data[5]
+                ));
+            } catch (Exception e) {
+                // Ignore invalid records.
+            }
+        }
+    }
+
+    public List<Medicine> getMedicineInventory() {
+        return medicineInventory;
+    }
+
+    public List<Pharmacy> getPharmacies() {
+        return pharmacies;
+    }
+
+    public List<InventoryTransaction> getTransactionHistory() {
+        return transactionHistory;
+    }
 
     public Medicine findMedicine(String medicineId) {
-        String sql = "SELECT * FROM medicines WHERE medicine_id = ? AND is_active = TRUE";
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setString(1, medicineId);
-            ResultSet rs = ps.executeQuery();
-
-            if (rs.next()) {
-                return mapMedicine(rs);
+        for (Medicine medicine : medicineInventory) {
+            if (medicine.getMedicineId().equals(medicineId)) {
+                return medicine;
             }
-
-        } catch (SQLException e) {
-            e.printStackTrace();
         }
-
         return null;
     }
 
-    public List<Medicine> getAllMedicines() {
-        List<Medicine> medicines = new ArrayList<>();
-        String sql = "SELECT * FROM medicines ORDER BY medicine_id";
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-
-            while (rs.next()) {
-                medicines.add(mapMedicine(rs));
-            }
-
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-
-        return medicines;
+    public boolean hasEnoughStock(String medicineId, int quantity) {
+        Medicine medicine = findMedicine(medicineId);
+        return medicine != null && medicine.isActive() && medicine.getStockQuantity() >= quantity;
     }
 
-    private Medicine mapMedicine(ResultSet rs) throws SQLException {
-        Medicine medicine = new Medicine();
-        medicine.setMedicineId(rs.getString("medicine_id"));
-        medicine.setName(rs.getString("name"));
-        medicine.setCategory(MedicineCategory.valueOf(rs.getString("category")));
-        medicine.setUnitPrice(rs.getDouble("unit_price"));
-        medicine.setStockQuantity(rs.getInt("stock_quantity"));
-        medicine.setMinThresholdQuantity(rs.getInt("min_threshold_quantity"));
-
-        Date expiry = rs.getDate("expiry_date");
-        if (expiry != null) {
-            medicine.setExpiryDate(expiry.toString());
+    public boolean deductStock(String medicineId, int quantity, String performedBy) {
+        Medicine medicine = findMedicine(medicineId);
+        if (medicine == null) {
+            return false;
         }
-
-        medicine.setActive(rs.getBoolean("is_active"));
-        return medicine;
-    }
-
-    public boolean addMedicine(Medicine medicine, String performedBy) {
-        String sql = "INSERT INTO medicines (medicine_id, name, category, unit_price, stock_quantity, min_threshold_quantity, expiry_date) VALUES (?, ?, ?, ?, ?, ?, ?)";
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setString(1, medicine.getMedicineId());
-            ps.setString(2, medicine.getName());
-            ps.setString(3, medicine.getCategory().name());
-            ps.setDouble(4, medicine.getUnitPrice());
-            ps.setInt(5, medicine.getStockQuantity());
-            ps.setInt(6, medicine.getMinThresholdQuantity());
-
-            if (medicine.getExpiryDate() == null || medicine.getExpiryDate().isEmpty()) {
-                ps.setNull(7, Types.DATE);
-            } else {
-                ps.setDate(7, Date.valueOf(medicine.getExpiryDate()));
-            }
-
-            boolean success = ps.executeUpdate() > 0;
-
-            if (success && medicine.getStockQuantity() > 0) {
-                recordTransaction(medicine.getMedicineId(), "STOCK_IN", medicine.getStockQuantity(), performedBy, "Initial stock");
-            }
-
-            return success;
-
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-
-        return false;
-    }
-
-    public boolean increaseStock(String medicineId, int quantity, String performedBy) {
-        if (quantity <= 0) {
+        if (!medicine.removeStock(quantity)) {
             return false;
         }
 
-        String sql = "UPDATE medicines SET stock_quantity = stock_quantity + ? WHERE medicine_id = ?";
+        InventoryTransaction transaction = new InventoryTransaction(
+            "IT" + System.currentTimeMillis(),
+            medicineId, quantity, "Dispensing",
+            new Date(), performedBy
+        );
+        transactionHistory.add(transaction);
 
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setInt(1, quantity);
-            ps.setString(2, medicineId);
-
-            boolean success = ps.executeUpdate() > 0;
-
-            if (success) {
-                recordTransaction(medicineId, "STOCK_IN", quantity, performedBy, "Stock replenishment");
-            }
-
-            return success;
-
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-
-        return false;
+        saveMedicines();
+        saveTransactions();
+        return true;
     }
 
-    private void recordTransaction(String medicineId, String type, int quantity, String performedBy, String remarks) {
-        String sql = "INSERT INTO inventory_transactions (medicine_id, transaction_type, quantity, performed_by, remarks) VALUES (?, ?, ?, ?, ?)";
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setString(1, medicineId);
-            ps.setString(2, type);
-            ps.setInt(3, quantity);
-            ps.setString(4, performedBy);
-            ps.setString(5, remarks);
-            ps.executeUpdate();
-
-        } catch (SQLException e) {
-            e.printStackTrace();
+    public void addStock(String medicineId, int quantity, String performedBy) {
+        Medicine medicine = findMedicine(medicineId);
+        if (medicine == null) {
+            throw new IllegalArgumentException("Medicine does not exist.");
         }
+        medicine.addStock(quantity);
+
+        transactionHistory.add(new InventoryTransaction(
+            "IT" + System.currentTimeMillis(),
+            medicineId, quantity, "Restocking",
+            new Date(), performedBy
+        ));
+
+        saveMedicines();
+        saveTransactions();
     }
 
     public List<Medicine> getLowStockMedicines() {
-        List<Medicine> medicines = new ArrayList<>();
-        String sql = "SELECT * FROM medicines WHERE stock_quantity <= min_threshold_quantity AND is_active = TRUE";
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-
-            while (rs.next()) {
-                medicines.add(mapMedicine(rs));
+        List<Medicine> result = new ArrayList<>();
+        for (Medicine medicine : medicineInventory) {
+            if (medicine.isLowStock()) {
+                result.add(medicine);
             }
+        }
+        return result;
+    }
 
-        } catch (SQLException e) {
-            e.printStackTrace();
+    private void saveMedicines() {
+        List<String> lines = new ArrayList<>();
+        lines.add("medicineId|name|category|unitPrice|stockQuantity|minThresholdQuantity|expiryDate|active");
+
+        SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd");
+        for (Medicine medicine : medicineInventory) {
+            lines.add(
+                medicine.getMedicineId() + "|" +
+                medicine.getName() + "|" +
+                medicine.getCategory() + "|" +
+                medicine.getUnitPrice() + "|" +
+                medicine.getStockQuantity() + "|" +
+                medicine.getMinThresholdQuantity() + "|" +
+                format.format(medicine.getExpiryDate()) + "|" +
+                medicine.isActive()
+            );
         }
 
-        return medicines;
+        dataStore.overwrite("medicines.txt", lines);
+    }
+
+    private void saveTransactions() {
+        List<String> lines = new ArrayList<>();
+        lines.add("transactionId|medicineId|quantity|transactionType|transactionDate|performedBy");
+
+        for (InventoryTransaction transaction : transactionHistory) {
+            lines.add(
+                transaction.getTransactionId() + "|" +
+                transaction.getMedicineId() + "|" +
+                transaction.getQuantity() + "|" +
+                transaction.getTransactionType() + "|" +
+                dateFormat.format(transaction.getTransactionDate()) + "|" +
+                transaction.getPerformedBy()
+            );
+        }
+
+        dataStore.overwrite("inventory_transactions.txt", lines);
     }
 }

@@ -1,98 +1,155 @@
 package pharmacy.gui;
 
-import pharmacy.database.DatabaseConnection;
-import pharmacy.manager.AlertManager;
-import pharmacy.model.Patient;
-import pharmacy.notification.Notification;
+import java.awt.BorderLayout;
+import java.util.List;
+import javax.swing.BorderFactory;
+import javax.swing.JButton;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JList;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
 
-import javax.swing.*;
-import java.awt.*;
-import java.sql.*;
+import pharmacy.manager.AlertManager;
+import pharmacy.manager.PrescriptionManager;
+import pharmacy.model.Notification;
+import pharmacy.model.Patient;
+import pharmacy.model.Prescription;
+import pharmacy.model.PrescriptionItem;
 
 public class PatientFrame extends JFrame {
+    private Patient patient;
+    private PrescriptionManager prescriptionManager;
+    private AlertManager alertManager;
+    private JList<String> prescriptionList;
+    private String[] displayData;
 
-    private final Patient patient;
-    private final AlertManager alertManager = new AlertManager();
-    private final JTextArea output = new JTextArea();
-
-    public PatientFrame(Patient patient) {
+    public PatientFrame(Patient patient, PrescriptionManager prescriptionManager,
+                        AlertManager alertManager) {
         this.patient = patient;
-        setTitle("Patient Dashboard - " + patient.getFullName());
-        setSize(800, 600);
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        this.prescriptionManager = prescriptionManager;
+        this.alertManager = alertManager;
+
+        setTitle("Patient Workspace - " + patient.getFullName());
+        setSize(750, 500);
         setLocationRelativeTo(null);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+
         buildUI();
-        showNotificationsOnLogin();
-        loadPrescriptions();
+        showNotifications();
     }
 
     private void buildUI() {
-        JPanel buttons = new JPanel(new GridLayout(1, 3, 10, 10));
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
 
-        JButton refresh = new JButton("Refresh");
-        JButton notifications = new JButton("Notifications");
-        JButton logout = new JButton("Logout");
+        // Top: welcome message
+        JPanel topPanel = new JPanel(new BorderLayout());
+        topPanel.add(new JLabel("Welcome back, " + patient.getFullName()), BorderLayout.WEST);
 
-        buttons.add(refresh);
-        buttons.add(notifications);
-        buttons.add(logout);
+        JButton refreshButton = new JButton("Refresh");
+        refreshButton.addActionListener(e -> refreshPrescriptions());
+        topPanel.add(refreshButton, BorderLayout.EAST);
 
-        add(buttons, BorderLayout.NORTH);
+        panel.add(topPanel, BorderLayout.NORTH);
 
-        output.setEditable(false);
-        add(new JScrollPane(output), BorderLayout.CENTER);
+        // Centre: prescription list
+        refreshPrescriptions();
+        prescriptionList = new JList<>(displayData);
+        panel.add(new JScrollPane(prescriptionList), BorderLayout.CENTER);
 
-        refresh.addActionListener(e -> loadPrescriptions());
-        notifications.addActionListener(e -> showNotificationsOnLogin());
-        logout.addActionListener(e -> logout());
+        // Bottom: view details
+        JButton detailButton = new JButton("View Prescription Details");
+        detailButton.addActionListener(e -> showPrescriptionDetail());
+        panel.add(detailButton, BorderLayout.SOUTH);
+
+        add(panel);
     }
 
-    private void showNotificationsOnLogin() {
-        var notifications = alertManager.getUnreadNotifications(patient.getUserId());
+    private void refreshPrescriptions() {
+        List<Prescription> prescriptions = prescriptionManager.getPatientPrescriptions(
+            patient.getUserId()
+        );
 
-        if (notifications.isEmpty()) {
+        displayData = new String[prescriptions.size()];
+        for (int i = 0; i < prescriptions.size(); i++) {
+            Prescription rx = prescriptions.get(i);
+            String statusSymbol = "";
+            switch (rx.getStatus()) {
+                case PENDING: statusSymbol = "⏳ "; break;
+                case PREPARING: statusSymbol = "⚙️ "; break;
+                case READY_FOR_COLLECTION: statusSymbol = "✅ "; break;
+                case DISPENSED: statusSymbol = "📦 "; break;
+                case CANCELLED: statusSymbol = "❌ "; break;
+            }
+            displayData[i] = statusSymbol + rx.getPrescriptionId() +
+                " | " + rx.getPrescriptionDate() +
+                " | " + rx.getStatus() +
+                " | Medicines: " + rx.getItems().size() +
+                " | Total: RM" + rx.getTotalPrice();
+        }
+
+        if (prescriptionList != null) {
+            prescriptionList.setListData(displayData);
+        }
+    }
+
+    private void showPrescriptionDetail() {
+        int index = prescriptionList.getSelectedIndex();
+        if (index < 0) {
+            JOptionPane.showMessageDialog(this, "Please select a prescription first.");
             return;
         }
 
-        StringBuilder message = new StringBuilder();
-        message.append("===== NEW NOTIFICATIONS =====\n\n");
+        List<Prescription> prescriptions = prescriptionManager.getPatientPrescriptions(
+            patient.getUserId()
+        );
+        Prescription rx = prescriptions.get(index);
+
+        StringBuilder detail = new StringBuilder();
+        detail.append("========== PRESCRIPTION DETAILS ==========\n");
+        detail.append("Prescription ID: ").append(rx.getPrescriptionId()).append("\n");
+        detail.append("Date: ").append(rx.getPrescriptionDate()).append("\n");
+        detail.append("Status: ").append(rx.getStatus()).append("\n");
+        detail.append("Doctor: ").append(rx.getPrescribingDoctor().getFullName()).append("\n");
+        detail.append("Remarks: ").append(rx.getRemarks()).append("\n\n");
+        detail.append("--- MEDICINES ---\n");
+
+        for (PrescriptionItem item : rx.getItems()) {
+            detail.append("  - ").append(item.getMedicine().getName())
+                  .append(" x").append(item.getQuantity())
+                  .append(" | Instructions: ").append(item.getDosageInstructions())
+                  .append(" | RM").append(item.getSubtotal()).append("\n");
+        }
+
+        detail.append("\nTotal: RM").append(rx.getTotalPrice());
+
+        if (rx.getStatus() == pharmacy.enumeration.PrescriptionStatus.CANCELLED) {
+            detail.append("\nCancellation reason: ").append(rx.getCancellationReason());
+        }
+
+        JOptionPane.showMessageDialog(
+            this,
+            detail.toString(),
+            "Prescription Details",
+            JOptionPane.INFORMATION_MESSAGE
+        );
+    }
+
+    private void showNotifications() {
+        List<Notification> notifications = alertManager.getNotificationsForUser(
+            patient.getUserId()
+        );
 
         for (Notification notification : notifications) {
-            message.append(notification.getMessage());
-            message.append("\n");
-            alertManager.markAsRead(notification.getNotificationId());
+            JOptionPane.showMessageDialog(
+                this,
+                notification.getMessage(),
+                "Notifications",
+                JOptionPane.INFORMATION_MESSAGE
+            );
+            alertManager.markAsRead(notification);
         }
-
-        JOptionPane.showMessageDialog(this, message.toString(), "Notifications", JOptionPane.INFORMATION_MESSAGE);
-    }
-
-    private void loadPrescriptions() {
-        String sql = "SELECT prescription_id, prescription_date, status, total_price, remarks FROM prescriptions WHERE patient_id = ? ORDER BY prescription_date DESC";
-
-        output.setText("===== MY PRESCRIPTIONS =====\n\n");
-
-        try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
-            ps.setString(1, patient.getUserId());
-            ResultSet rs = ps.executeQuery();
-
-            while (rs.next()) {
-                output.append("Prescription ID: " + rs.getString("prescription_id") + "\n");
-                output.append("Date: " + rs.getTimestamp("prescription_date") + "\n");
-                output.append("Status: " + rs.getString("status") + "\n");
-                output.append("Total: RM " + rs.getDouble("total_price") + "\n");
-                output.append("Remarks: " + rs.getString("remarks") + "\n");
-                output.append("-----------------------------\n");
-            }
-
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void logout() {
-        dispose();
-        new LoginFrame().setVisible(true);
     }
 }
