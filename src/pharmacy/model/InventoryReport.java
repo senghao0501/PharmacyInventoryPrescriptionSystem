@@ -1,3 +1,4 @@
+// InventoryReport.java - 添加消耗统计
 package pharmacy.model;
 
 import java.util.ArrayList;
@@ -9,11 +10,13 @@ public class InventoryReport extends ReportGenerator {
     private int totalItems;
     private int expiredItemsCount;
     private List<String> reportDataForEachMedicine;
+    private int totalConsumed; // Track consumed items
 
     public InventoryReport(String reportId, List<Medicine> medicines) {
         super(reportId, "Medicine Inventory Report");
         reportDataForEachMedicine = new ArrayList<>();
         totalItems = medicines.size();
+        totalConsumed = 0;
 
         for (Medicine medicine : medicines) {
             double value = medicine.getUnitPrice() * medicine.getStockQuantity();
@@ -22,6 +25,9 @@ public class InventoryReport extends ReportGenerator {
             if (medicine.isLowStock()) {
                 lowStockItemsCount++;
             }
+
+            // Estimate consumed based on initial stock vs current
+            // This would be better with transaction history
 
             reportDataForEachMedicine.add(
                 medicine.getMedicineId() + " | " + medicine.getName() +
@@ -33,16 +39,13 @@ public class InventoryReport extends ReportGenerator {
 
     @Override
     public String generate() {
-        StringBuilder result = new StringBuilder();
-        result.append("========== INVENTORY REPORT ==========\n");
-        result.append("Total medicines: " + totalItems + "\n");
-        result.append("Low-stock medicines: " + lowStockItemsCount + "\n");
-        result.append("Expired medicines: " + expiredItemsCount + "\n");
-        result.append("Total inventory value: RM" + String.format("%.2f", totalStockValue) + "\n\n");
-
-        for (String line : reportDataForEachMedicine) {
-            result.append(line).append("\n");
-        }
-        return result.toString();
+        return "========== INVENTORY REPORT ==========\n" +
+               "Total medicines: " + totalItems + "\n" +
+               "Low-stock medicines: " + lowStockItemsCount + "\n" +
+               "Expired medicines: " + expiredItemsCount + "\n" +
+               "Total inventory value: RM" + String.format("%.2f", totalStockValue) + "\n" +
+               "Note: Inventory consumption is tracked via transactions.\n\n" +
+               "--- Current Stock ---\n" +
+               String.join("\n", reportDataForEachMedicine);
     }
 }

@@ -51,11 +51,6 @@ public class PrescriptionManager {
 
                 prescription.setUpdatedAt(dateFormat.parse(data[8]));
 
-                // The cancellation reason is only applicable to cancelled prescriptions.
-                if (!data[9].isEmpty() && prescription.getStatus() == PrescriptionStatus.CANCELLED) {
-                    // Retained in the persisted prescription record.
-                }
-
                 loadPrescriptionItems(prescription);
                 prescriptionList.add(prescription);
 
@@ -96,7 +91,6 @@ public class PrescriptionManager {
             throw new IllegalArgumentException("A prescription must contain at least one medicine.");
         }
 
-        // Validate the availability of every medicine.
         for (PrescriptionItem item : items) {
             Medicine medicine = item.getMedicine();
             if (medicine == null) {
@@ -113,7 +107,6 @@ public class PrescriptionManager {
             }
         }
 
-        // Create the prescription.
         Prescription prescription = new Prescription(
             "RX" + System.currentTimeMillis(),
             patient, doctor, remarks
@@ -168,7 +161,6 @@ public class PrescriptionManager {
             throw new IllegalStateException("The prescription is not currently being prepared.");
         }
 
-        // Verify that the stock is still sufficient.
         for (PrescriptionItem item : prescription.getItems()) {
             if (!inventoryManager.hasEnoughStock(
                     item.getMedicine().getMedicineId(), item.getQuantity())) {
@@ -176,7 +168,6 @@ public class PrescriptionManager {
             }
         }
 
-        // Deduct the inventory.
         for (PrescriptionItem item : prescription.getItems()) {
             inventoryManager.deductStock(
                 item.getMedicine().getMedicineId(),
@@ -188,15 +179,55 @@ public class PrescriptionManager {
         prescription.setDispensingPharmacist(pharmacist);
         prescription.setStatus(PrescriptionStatus.READY_FOR_COLLECTION);
 
-        // Notify the patient.
         alertManager.createPrescriptionReadyNotification(prescription);
 
         savePrescriptions();
     }
 
-    public void confirmCollection(Prescription prescription, Pharmacist pharmacist) {
+    public void patientConfirmsCollection(Prescription prescription, Patient patient) {
         if (prescription.getStatus() != PrescriptionStatus.READY_FOR_COLLECTION) {
             throw new IllegalStateException("The prescription is not ready for collection.");
+        }
+
+        if (!prescription.getPatient().getUserId().equals(patient.getUserId())) {
+            throw new IllegalStateException("This prescription does not belong to you.");
+        }
+
+        prescription.setStatus(PrescriptionStatus.PAYMENT_PENDING);
+        savePrescriptions();
+    }
+
+    // Pharmacist processes payment (for pharmacist frame)
+    public void processPayment(Prescription prescription, Pharmacist pharmacist) {
+        if (prescription.getStatus() != PrescriptionStatus.PAYMENT_PENDING) {
+            throw new IllegalStateException("Payment can only be processed after collection.");
+        }
+
+        prescription.setDispensingPharmacist(pharmacist);
+        prescription.setStatus(PrescriptionStatus.DISPENSED);
+        savePrescriptions();
+    }
+
+    // Patient makes payment (for patient frame)
+    public void processPatientPayment(Prescription prescription, Patient patient) {
+        if (prescription.getStatus() != PrescriptionStatus.PAYMENT_PENDING) {
+            throw new IllegalStateException("Payment can only be processed after collection.");
+        }
+
+        if (!prescription.getPatient().getUserId().equals(patient.getUserId())) {
+            throw new IllegalStateException("This prescription does not belong to you.");
+        }
+
+        // Find a pharmacist to associate with this transaction
+        Pharmacist pharmacist = null;
+        if (prescription.getDispensingPharmacist() != null) {
+            pharmacist = prescription.getDispensingPharmacist();
+        } else {
+            // Get first available pharmacist
+            List<Pharmacist> pharmacists = userManager.getPharmacists();
+            if (!pharmacists.isEmpty()) {
+                pharmacist = pharmacists.get(0);
+            }
         }
 
         prescription.setDispensingPharmacist(pharmacist);

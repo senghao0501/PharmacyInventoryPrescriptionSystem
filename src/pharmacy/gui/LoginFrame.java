@@ -1,6 +1,7 @@
 package pharmacy.gui;
 
 import java.awt.GridLayout;
+import java.awt.BorderLayout;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JFrame;
@@ -44,31 +45,47 @@ public class LoginFrame extends JFrame {
         this.reportManager = reportManager;
 
         setTitle("Pharmacy Inventory and Prescription Management System");
-        setSize(450, 300);
+        setSize(450, 350);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         buildUI();
     }
 
     private void buildUI() {
-        JPanel panel = new JPanel(new GridLayout(4, 2, 10, 10));
-        panel.setBorder(BorderFactory.createEmptyBorder(30, 30, 30, 30));
+        JPanel mainPanel = new JPanel(new BorderLayout(10, 10));
+        mainPanel.setBorder(BorderFactory.createEmptyBorder(30, 30, 20, 30));
 
-        panel.add(new JLabel("Username:"));
+        JPanel loginPanel = new JPanel(new GridLayout(3, 2, 10, 10));
+        
+        loginPanel.add(new JLabel("Username:"));
         usernameField = new JTextField();
-        panel.add(usernameField);
+        loginPanel.add(usernameField);
 
-        panel.add(new JLabel("Password:"));
+        loginPanel.add(new JLabel("Password:"));
         passwordField = new JPasswordField();
-        panel.add(passwordField);
+        loginPanel.add(passwordField);
 
-        panel.add(new JLabel());
+        loginPanel.add(new JLabel());
         JButton loginButton = new JButton("Log In");
-        panel.add(loginButton);
+        loginPanel.add(loginButton);
+
+        mainPanel.add(loginPanel, BorderLayout.CENTER);
+
+        JPanel buttonPanel = new JPanel();
+        JButton registerButton = new JButton("Register as Patient");
+        registerButton.addActionListener(e -> showRegistrationDialog());
+        buttonPanel.add(registerButton);
+
+        mainPanel.add(buttonPanel, BorderLayout.SOUTH);
 
         loginButton.addActionListener(e -> login());
 
-        add(panel);
+        add(mainPanel);
+    }
+
+    private void showRegistrationDialog() {
+        RegistrationDialog dialog = new RegistrationDialog(this, userManager);
+        dialog.setVisible(true);
     }
 
     private void login() {

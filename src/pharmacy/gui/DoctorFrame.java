@@ -2,6 +2,8 @@ package pharmacy.gui;
 
 import java.awt.BorderLayout;
 import java.awt.GridLayout;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.BorderFactory;
@@ -16,14 +18,18 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
 
+import pharmacy.manager.AlertManager;
 import pharmacy.manager.InventoryManager;
 import pharmacy.manager.PrescriptionManager;
+import pharmacy.manager.ReportManager;
 import pharmacy.manager.UserManager;
 import pharmacy.model.Doctor;
 import pharmacy.model.Medicine;
 import pharmacy.model.Patient;
 import pharmacy.model.Prescription;
 import pharmacy.model.PrescriptionItem;
+import pharmacy.repository.TxtDataStore;
+import pharmacy.service.AuthService;
 
 public class DoctorFrame extends JFrame {
     private Doctor doctor;
@@ -55,13 +61,30 @@ public class DoctorFrame extends JFrame {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
         buildUI();
+        
+        addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                logout();
+            }
+        });
     }
 
     private void buildUI() {
         JPanel mainPanel = new JPanel(new BorderLayout(10, 10));
         mainPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
 
-        // Top: prescription form
+        JPanel topPanel = new JPanel(new BorderLayout());
+        JLabel titleLabel = new JLabel("Doctor Workspace - " + doctor.getFullName());
+        titleLabel.setFont(titleLabel.getFont().deriveFont(16f));
+        topPanel.add(titleLabel, BorderLayout.WEST);
+
+        JButton logoutButton = new JButton("Logout");
+        logoutButton.addActionListener(e -> logout());
+        topPanel.add(logoutButton, BorderLayout.EAST);
+
+        mainPanel.add(topPanel, BorderLayout.NORTH);
+
         JPanel formPanel = new JPanel(new GridLayout(6, 2, 10, 10));
 
         formPanel.add(new JLabel("Select Patient:"));
@@ -94,12 +117,10 @@ public class DoctorFrame extends JFrame {
 
         mainPanel.add(formPanel, BorderLayout.NORTH);
 
-        // Centre: selected medicines
         itemListModel = new DefaultListModel<>();
         JList<String> itemList = new JList<>(itemListModel);
         mainPanel.add(new JScrollPane(itemList), BorderLayout.CENTER);
 
-        // Bottom: actions
         JPanel buttonPanel = new JPanel();
 
         JButton addButton = new JButton("Add Medicine");
@@ -120,6 +141,25 @@ public class DoctorFrame extends JFrame {
         cancelButton.addActionListener(e -> cancelPrescription());
 
         add(mainPanel);
+    }
+
+    private void logout() {
+        dispose();
+        TxtDataStore dataStore = new TxtDataStore();
+        UserManager newUserManager = new UserManager(dataStore);
+        InventoryManager newInventoryManager = new InventoryManager(dataStore);
+        AlertManager newAlertManager = new AlertManager(dataStore);
+        ReportManager newReportManager = new ReportManager();
+        AuthService authService = new AuthService(newUserManager);
+        
+        new LoginFrame(
+            authService,
+            newUserManager,
+            newInventoryManager,
+            prescriptionManager,
+            newAlertManager,
+            newReportManager
+        ).setVisible(true);
     }
 
     private void addMedicine() {
@@ -235,7 +275,6 @@ public class DoctorFrame extends JFrame {
             return;
         }
 
-        // Ensure that this prescription was issued by the current doctor.
         if (!targetRx.getPrescribingDoctor().getUserId().equals(doctor.getUserId())) {
             JOptionPane.showMessageDialog(
                 this,

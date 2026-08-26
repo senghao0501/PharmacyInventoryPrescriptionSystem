@@ -9,10 +9,12 @@ public class SalesReport extends ReportGenerator {
     private double totalRevenue;
     private int totalPrescriptionsProcessed;
     private String topSellingMedicine;
+    private int pendingPaymentCount;
 
     public SalesReport(String reportId, List<Prescription> prescriptions) {
         super(reportId, "Pharmacy Sales Report");
         Map<String, Integer> medicineSales = new HashMap<>();
+        pendingPaymentCount = 0;
 
         for (Prescription prescription : prescriptions) {
             if (prescription.getStatus() == PrescriptionStatus.DISPENSED) {
@@ -24,6 +26,8 @@ public class SalesReport extends ReportGenerator {
                     int current = medicineSales.getOrDefault(medicineName, 0);
                     medicineSales.put(medicineName, current + item.getQuantity());
                 }
+            } else if (prescription.getStatus() == PrescriptionStatus.PAYMENT_PENDING) {
+                pendingPaymentCount++;
             }
         }
 
@@ -39,8 +43,9 @@ public class SalesReport extends ReportGenerator {
     @Override
     public String generate() {
         return "========== SALES REPORT ==========\n" +
-               "Dispensed prescriptions: " + totalPrescriptionsProcessed + "\n" +
+               "Dispensed prescriptions (Paid): " + totalPrescriptionsProcessed + "\n" +
                "Total revenue: RM" + String.format("%.2f", totalRevenue) + "\n" +
-               "Top-selling medicine: " + (topSellingMedicine == null ? "No data" : topSellingMedicine);
+               "Top-selling medicine: " + (topSellingMedicine == null ? "No data" : topSellingMedicine) + "\n" +
+               "Pending payment prescriptions: " + pendingPaymentCount;
     }
 }

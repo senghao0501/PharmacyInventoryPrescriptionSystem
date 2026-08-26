@@ -2,6 +2,8 @@ package pharmacy.gui;
 
 import java.awt.BorderLayout;
 import java.awt.GridLayout;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.util.List;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListModel;
@@ -15,6 +17,7 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
 
+import pharmacy.manager.AlertManager;
 import pharmacy.manager.InventoryManager;
 import pharmacy.manager.PrescriptionManager;
 import pharmacy.manager.ReportManager;
@@ -23,6 +26,8 @@ import pharmacy.model.Admin;
 import pharmacy.model.Medicine;
 import pharmacy.model.Prescription;
 import pharmacy.model.User;
+import pharmacy.repository.TxtDataStore;
+import pharmacy.service.AuthService;
 
 public class AdminFrame extends JFrame {
     private Admin admin;
@@ -31,18 +36,15 @@ public class AdminFrame extends JFrame {
     private PrescriptionManager prescriptionManager;
     private ReportManager reportManager;
 
-    // User-management components
     private DefaultListModel<String> userListModel;
     private JList<String> userList;
 
-    // Medicine-management components
     private DefaultListModel<String> medicineListModel;
     private JList<String> medicineList;
     private JTextField medicineNameField;
     private JTextField medicinePriceField;
     private JTextField medicineStockField;
 
-    // Prescription-viewing components
     private DefaultListModel<String> prescriptionListModel;
     private JList<String> prescriptionList;
 
@@ -62,34 +64,59 @@ public class AdminFrame extends JFrame {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
         buildUI();
+        
+        addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                logout();
+            }
+        });
     }
 
     private void buildUI() {
         JPanel mainPanel = new JPanel(new BorderLayout(10, 10));
         mainPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
 
-        // Header
+        JPanel topPanel = new JPanel(new BorderLayout());
         JLabel titleLabel = new JLabel("Welcome back, Administrator " + admin.getFullName() + "!");
         titleLabel.setFont(titleLabel.getFont().deriveFont(18f));
-        mainPanel.add(titleLabel, BorderLayout.NORTH);
+        topPanel.add(titleLabel, BorderLayout.WEST);
 
-        // Main area: three columns
+        JButton logoutButton = new JButton("Logout");
+        logoutButton.addActionListener(e -> logout());
+        topPanel.add(logoutButton, BorderLayout.EAST);
+
+        mainPanel.add(topPanel, BorderLayout.NORTH);
+
         JPanel centerPanel = new JPanel(new GridLayout(1, 3, 10, 10));
 
-        // Left: user management
         centerPanel.add(buildUserPanel());
-
-        // Centre: medicine management
         centerPanel.add(buildMedicinePanel());
-
-        // Right: prescriptions and reports
         centerPanel.add(buildPrescriptionPanel());
 
         mainPanel.add(centerPanel, BorderLayout.CENTER);
         add(mainPanel);
     }
 
-    // ==================== USER MANAGEMENT ====================
+    private void logout() {
+        dispose();
+        TxtDataStore dataStore = new TxtDataStore();
+        UserManager newUserManager = new UserManager(dataStore);
+        InventoryManager newInventoryManager = new InventoryManager(dataStore);
+        AlertManager newAlertManager = new AlertManager(dataStore);
+        ReportManager newReportManager = new ReportManager();
+        AuthService authService = new AuthService(newUserManager);
+        
+        new LoginFrame(
+            authService,
+            newUserManager,
+            newInventoryManager,
+            prescriptionManager,
+            newAlertManager,
+            newReportManager
+        ).setVisible(true);
+    }
+
     private JPanel buildUserPanel() {
         JPanel panel = new JPanel(new BorderLayout(5, 5));
         panel.setBorder(BorderFactory.createTitledBorder("User Management"));
@@ -141,7 +168,7 @@ public class AdminFrame extends JFrame {
         }
         String item = userListModel.get(index);
         String[] parts = item.split(" \\| ");
-        return parts[0].substring(2); // Remove the status symbol.
+        return parts[0].substring(2);
     }
 
     private void disableUser() {
@@ -249,7 +276,6 @@ public class AdminFrame extends JFrame {
         }
     }
 
-    // ==================== MEDICINE MANAGEMENT ====================
     private JPanel buildMedicinePanel() {
         JPanel panel = new JPanel(new BorderLayout(5, 5));
         panel.setBorder(BorderFactory.createTitledBorder("Medicine Management"));
@@ -323,7 +349,7 @@ public class AdminFrame extends JFrame {
             );
 
             inventoryManager.getMedicineInventory().add(newMed);
-            inventoryManager.addStock(medId, 0, admin.getUserId()); // Trigger persistence.
+            inventoryManager.addStock(medId, 0, admin.getUserId());
 
             refreshMedicineList();
             medicineNameField.setText("");
@@ -339,7 +365,6 @@ public class AdminFrame extends JFrame {
         }
     }
 
-    // ==================== PRESCRIPTIONS AND REPORTS ====================
     private JPanel buildPrescriptionPanel() {
         JPanel panel = new JPanel(new BorderLayout(5, 5));
         panel.setBorder(BorderFactory.createTitledBorder("Prescriptions and Reports"));
@@ -373,8 +398,17 @@ public class AdminFrame extends JFrame {
         List<Prescription> prescriptions = prescriptionManager.getPrescriptionList();
         for (Prescription rx : prescriptions) {
             String status = rx.getStatus().toString();
+            String statusSymbol = "";
+            switch (rx.getStatus()) {
+                case PENDING: statusSymbol = "⏳"; break;
+                case PREPARING: statusSymbol = "⚙️"; break;
+                case READY_FOR_COLLECTION: statusSymbol = "✅"; break;
+                case PAYMENT_PENDING: statusSymbol = "💰"; break;
+                case DISPENSED: statusSymbol = "📦"; break;
+                case CANCELLED: statusSymbol = "❌"; break;
+            }
             prescriptionListModel.addElement(
-                rx.getPrescriptionId() + " | " +
+                statusSymbol + " " + rx.getPrescriptionId() + " | " +
                 rx.getPatient().getFullName() + " | " +
                 status + " | RM" + rx.getTotalPrice()
             );
