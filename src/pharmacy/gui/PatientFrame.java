@@ -14,6 +14,8 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
+import javax.swing.event.ListSelectionEvent;
+import javax.swing.event.ListSelectionListener;
 
 import pharmacy.manager.AlertManager;
 import pharmacy.manager.InventoryManager;
@@ -39,6 +41,7 @@ public class PatientFrame extends JFrame {
     private JButton paymentButton;
     private JButton detailButton;
     private JButton refreshButton;
+    private List<Prescription> currentPrescriptions;
 
     public PatientFrame(Patient patient, PrescriptionManager prescriptionManager,
                         AlertManager alertManager) {
@@ -91,11 +94,11 @@ public class PatientFrame extends JFrame {
         JPanel actionPanel = new JPanel(new BorderLayout(5, 5));
         actionPanel.setBorder(BorderFactory.createTitledBorder("Actions"));
 
-        // Status label - 先创建
+        // Status label
         statusLabel = new JLabel("Select a prescription to perform actions");
         actionPanel.add(statusLabel, BorderLayout.NORTH);
 
-        // Buttons - 先创建所有按钮
+        // Buttons
         collectionButton = new JButton("Confirm Collection");
         paymentButton = new JButton("Make Payment");
         detailButton = new JButton("View Details");
@@ -121,7 +124,17 @@ public class PatientFrame extends JFrame {
         mainPanel.add(splitPane, BorderLayout.CENTER);
         add(mainPanel);
 
-        // 最后再刷新处方列表和更新按钮状态
+        // Add selection listener to update buttons when user selects a prescription
+        prescriptionList.addListSelectionListener(new ListSelectionListener() {
+            @Override
+            public void valueChanged(ListSelectionEvent e) {
+                if (!e.getValueIsAdjusting()) {
+                    updateButtonStates();
+                }
+            }
+        });
+
+        // Refresh prescriptions
         refreshPrescriptions();
     }
 
@@ -150,14 +163,14 @@ public class PatientFrame extends JFrame {
         }
         
         prescriptionListModel.clear();
-        List<Prescription> prescriptions = prescriptionManager.getPatientPrescriptions(
+        currentPrescriptions = prescriptionManager.getPatientPrescriptions(
             patient.getUserId()
         );
 
         // Sort by date (newest first)
-        prescriptions.sort((p1, p2) -> p2.getPrescriptionDate().compareTo(p1.getPrescriptionDate()));
+        currentPrescriptions.sort((p1, p2) -> p2.getPrescriptionDate().compareTo(p1.getPrescriptionDate()));
 
-        for (Prescription rx : prescriptions) {
+        for (Prescription rx : currentPrescriptions) {
             String statusSymbol = "";
             String actionHint = "";
             
@@ -202,26 +215,25 @@ public class PatientFrame extends JFrame {
             prescriptionListModel.addElement(displayText);
         }
 
-        updateButtonStates();
+        // 如果列表为空，重置按钮状态
+        if (prescriptionListModel.isEmpty()) {
+            collectionButton.setEnabled(false);
+            paymentButton.setEnabled(false);
+            detailButton.setEnabled(false);
+            statusLabel.setText("No prescriptions found.");
+        } else {
+            // 选择第一项
+            prescriptionList.setSelectedIndex(0);
+            updateButtonStates();
+        }
     }
 
     private Prescription getSelectedPrescription() {
         int index = prescriptionList.getSelectedIndex();
-        if (index < 0) {
+        if (index < 0 || currentPrescriptions == null || index >= currentPrescriptions.size()) {
             return null;
         }
-
-        List<Prescription> prescriptions = prescriptionManager.getPatientPrescriptions(
-            patient.getUserId()
-        );
-        
-        // Sort to match display order
-        prescriptions.sort((p1, p2) -> p2.getPrescriptionDate().compareTo(p1.getPrescriptionDate()));
-        
-        if (index < prescriptions.size()) {
-            return prescriptions.get(index);
-        }
-        return null;
+        return currentPrescriptions.get(index);
     }
 
     private void updateButtonStates() {
@@ -242,25 +254,35 @@ public class PatientFrame extends JFrame {
 
         detailButton.setEnabled(true);
         
-        // Enable collection button only if status is READY_FOR_COLLECTION
-        boolean isReadyForCollection = rx.getStatus() == pharmacy.enumeration.PrescriptionStatus.READY_FOR_COLLECTION;
-        collectionButton.setEnabled(isReadyForCollection);
+        // 获取当前状态
+        pharmacy.enumeration.PrescriptionStatus status = rx.getStatus();
+        boolean isReadyForCollection = status == pharmacy.enumeration.PrescriptionStatus.READY_FOR_COLLECTION;
+        boolean isPaymentPending = status == pharmacy.enumeration.PrescriptionStatus.PAYMENT_PENDING;
         
-        // Enable payment button only if status is PAYMENT_PENDING
-        boolean isPaymentPending = rx.getStatus() == pharmacy.enumeration.PrescriptionStatus.PAYMENT_PENDING;
+        collectionButton.setEnabled(isReadyForCollection);
         paymentButton.setEnabled(isPaymentPending);
 
         // Update status label
         if (isReadyForCollection) {
-            statusLabel.setText("This prescription is ready for collection. Please confirm you have collected the medication.");
+            statusLabel.setText("✅ This prescription is ready for collection. Please confirm you have collected the medication.");
+            collectionButton.setEnabled(true);
+            paymentButton.setEnabled(false);
         } else if (isPaymentPending) {
-            statusLabel.setText("You have collected the medication. Please make payment to complete the process.");
-        } else if (rx.getStatus() == pharmacy.enumeration.PrescriptionStatus.DISPENSED) {
-            statusLabel.setText("This prescription has been completed and dispensed.");
-        } else if (rx.getStatus() == pharmacy.enumeration.PrescriptionStatus.CANCELLED) {
-            statusLabel.setText("This prescription has been cancelled.");
+            statusLabel.setText("💰 You have collected the medication. Please make payment to complete the process.");
+            collectionButton.setEnabled(false);
+            paymentButton.setEnabled(true);
+        } else if (status == pharmacy.enumeration.PrescriptionStatus.DISPENSED) {
+            statusLabel.setText("📦 This prescription has been completed and dispensed.");
+            collectionButton.setEnabled(false);
+            paymentButton.setEnabled(false);
+        } else if (status == pharmacy.enumeration.PrescriptionStatus.CANCELLED) {
+            statusLabel.setText("❌ This prescription has been cancelled.");
+            collectionButton.setEnabled(false);
+            paymentButton.setEnabled(false);
         } else {
-            statusLabel.setText("This prescription is being processed. Please wait.");
+            statusLabel.setText("⏳ This prescription is being processed. Please wait.");
+            collectionButton.setEnabled(false);
+            paymentButton.setEnabled(false);
         }
     }
 
@@ -376,7 +398,8 @@ public class PatientFrame extends JFrame {
                 this,
                 "Click YES to simulate payment processing.\n\n" +
                 "Amount: RM" + String.format("%.2f", rx.getTotalPrice()) + "\n" +
-                "Payment Method: Cash/Card",
+                "Payment Method: Cash/Card\n\n" +
+                "Note: After payment, pharmacist will confirm to complete.",
                 "Process Payment",
                 JOptionPane.YES_NO_OPTION,
                 JOptionPane.QUESTION_MESSAGE
@@ -384,6 +407,9 @@ public class PatientFrame extends JFrame {
 
             if (paymentConfirm == JOptionPane.YES_OPTION) {
                 try {
+                    // 患者付款后，状态变为 PAYMENT_PENDING -> 等待药剂师确认
+                    // 这里我们调用 processPatientPayment，它会将状态变为 DISPENSED
+                    // 但根据你的需求，应该让药剂师确认后才变为 DISPENSED
                     prescriptionManager.processPatientPayment(rx, patient);
                     refreshPrescriptions();
                     JOptionPane.showMessageDialog(this, 

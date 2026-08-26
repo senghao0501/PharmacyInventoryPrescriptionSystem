@@ -1,1 +1,2 @@
 prescriptionId|prescriptionDate|remarks|patientId|doctorId|status|pharmacistId|totalPrice|updatedAt|cancellationReason
+RX1787754860294|2026-08-26 22:34:20|n|P1787754777595|D001|DISPENSED|PH001|43.0|2026-08-26 22:36:49|
