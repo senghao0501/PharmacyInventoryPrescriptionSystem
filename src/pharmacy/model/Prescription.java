@@ -69,7 +69,12 @@ public class Prescription {
         this.updatedAt = new Date();
     }
 
-    // Used to restore dates when loading from a file.
+    public void setRemarks(String remarks) {
+        this.remarks = remarks;
+        this.updatedAt = new Date();
+    }
+
+    // Used to restore dates when loading from a file
     public void setPrescriptionDate(Date date) { this.prescriptionDate = date; }
     public void setUpdatedAt(Date date) { this.updatedAt = date; }
 

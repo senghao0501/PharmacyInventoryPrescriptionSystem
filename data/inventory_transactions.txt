@@ -1,3 +1,1 @@
 transactionId|medicineId|quantity|transactionType|transactionDate|performedBy
-IT1787754922596|MED003|2|Dispensing|2026-08-26 22:35:22|PH001
-IT1787754922607|MED004|2|Dispensing|2026-08-26 22:35:22|PH001

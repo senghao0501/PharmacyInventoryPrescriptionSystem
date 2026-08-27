@@ -72,17 +72,21 @@ public class PharmacistFrame extends JFrame {
         JPanel mainPanel = new JPanel(new BorderLayout(10, 10));
         mainPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
 
+        // Top Panel with title and logout button
         JPanel topPanel = new JPanel(new BorderLayout());
         JLabel titleLabel = new JLabel("Pharmacist Workspace - " + pharmacist.getFullName());
         titleLabel.setFont(titleLabel.getFont().deriveFont(16f));
         topPanel.add(titleLabel, BorderLayout.WEST);
 
+        JPanel topRightPanel = new JPanel();
         JButton logoutButton = new JButton("Logout");
         logoutButton.addActionListener(e -> logout());
-        topPanel.add(logoutButton, BorderLayout.EAST);
+        topRightPanel.add(logoutButton);
+        topPanel.add(topRightPanel, BorderLayout.EAST);
 
         mainPanel.add(topPanel, BorderLayout.NORTH);
 
+        // Form Panel
         JPanel formPanel = new JPanel(new GridLayout(2, 3, 10, 10));
 
         formPanel.add(new JLabel("Select Pharmacy:"));
@@ -106,6 +110,7 @@ public class PharmacistFrame extends JFrame {
 
         mainPanel.add(formPanel, BorderLayout.NORTH);
 
+        // Center Panel
         JPanel centerPanel = new JPanel(new GridLayout(1, 2, 10, 10));
 
         medicineListModel = new DefaultListModel<>();
@@ -120,19 +125,16 @@ public class PharmacistFrame extends JFrame {
 
         mainPanel.add(centerPanel, BorderLayout.CENTER);
 
+        // Bottom Button Panel
         JPanel buttonPanel = new JPanel();
 
         JButton startButton = new JButton("Start Preparing");
         JButton completeButton = new JButton("Complete Dispensing");
-        JButton collectionButton = new JButton("Confirm Collection");
-        JButton paymentButton = new JButton("Process Payment");
         JButton inventoryReportButton = new JButton("Inventory Report");
         JButton salesReportButton = new JButton("Sales Report");
 
         buttonPanel.add(startButton);
         buttonPanel.add(completeButton);
-        buttonPanel.add(collectionButton);
-        buttonPanel.add(paymentButton);
         buttonPanel.add(inventoryReportButton);
         buttonPanel.add(salesReportButton);
 
@@ -140,8 +142,6 @@ public class PharmacistFrame extends JFrame {
 
         startButton.addActionListener(e -> startPreparing());
         completeButton.addActionListener(e -> completeDispensing());
-        collectionButton.addActionListener(e -> confirmCollection());
-        paymentButton.addActionListener(e -> processPayment());
         inventoryReportButton.addActionListener(e -> showInventoryReport());
         salesReportButton.addActionListener(e -> showSalesReport());
 
@@ -180,6 +180,7 @@ public class PharmacistFrame extends JFrame {
         List<Prescription> prescriptions = prescriptionManager.getPrescriptionList();
 
         for (Prescription rx : prescriptions) {
+            // Only show prescriptions that are NOT DISPENSED or CANCELLED
             if (rx.getStatus() == pharmacy.enumeration.PrescriptionStatus.PENDING ||
                 rx.getStatus() == pharmacy.enumeration.PrescriptionStatus.PREPARING ||
                 rx.getStatus() == pharmacy.enumeration.PrescriptionStatus.READY_FOR_COLLECTION ||
@@ -194,18 +195,25 @@ public class PharmacistFrame extends JFrame {
                     default: break;
                 }
 
+                String actionHint = "";
+                if (rx.getStatus() == pharmacy.enumeration.PrescriptionStatus.READY_FOR_COLLECTION) {
+                    actionHint = " [Waiting for patient collection]";
+                } else if (rx.getStatus() == pharmacy.enumeration.PrescriptionStatus.PAYMENT_PENDING) {
+                    actionHint = " [Waiting for patient payment]";
+                }
+
                 prescriptionListModel.addElement(
                     statusSymbol + " " + rx.getPrescriptionId() +
                     " | Patient: " + rx.getPatient().getFullName() +
                     " | Status: " + rx.getStatus() +
-                    " | Medicines: " + rx.getItems().size()
+                    " | Medicines: " + rx.getItems().size() +
+                    actionHint
                 );
             }
         }
     }
 
     private void addStock() {
-        int index = 0;
         if (medicineListModel.isEmpty()) {
             JOptionPane.showMessageDialog(this, "No medicines available.");
             return;
@@ -275,6 +283,12 @@ public class PharmacistFrame extends JFrame {
             return;
         }
 
+        if (prescription.getStatus() != pharmacy.enumeration.PrescriptionStatus.PENDING) {
+            JOptionPane.showMessageDialog(this, 
+                "Only PENDING prescriptions can be started.");
+            return;
+        }
+
         try {
             prescriptionManager.startPreparing(prescription, pharmacist);
             refreshPrescriptions();
@@ -291,85 +305,20 @@ public class PharmacistFrame extends JFrame {
             return;
         }
 
+        if (prescription.getStatus() != pharmacy.enumeration.PrescriptionStatus.PREPARING) {
+            JOptionPane.showMessageDialog(this, 
+                "Only PREPARING prescriptions can be completed.");
+            return;
+        }
+
         try {
             prescriptionManager.completeDispensing(prescription, pharmacist);
             refreshPrescriptions();
             refreshMedicines();
             JOptionPane.showMessageDialog(this, 
-                "Dispensing completed. The patient may collect the medication.\n" +
-                "Patient must confirm collection before payment.");
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, e.getMessage());
-        }
-    }
-
-    private void confirmCollection() {
-        Prescription prescription = getSelectedPrescription();
-        if (prescription == null) {
-            JOptionPane.showMessageDialog(this, "Please select a prescription.");
-            return;
-        }
-
-        if (prescription.getStatus() != pharmacy.enumeration.PrescriptionStatus.READY_FOR_COLLECTION) {
-            JOptionPane.showMessageDialog(this, 
-                "Only prescriptions ready for collection can be confirmed.");
-            return;
-        }
-
-        try {
-            int confirm = JOptionPane.showConfirmDialog(
-                this,
-                "Has the patient " + prescription.getPatient().getFullName() + 
-                " confirmed collection of their medication?",
-                "Patient Collection Confirmation",
-                JOptionPane.YES_NO_OPTION
-            );
-
-            if (confirm == JOptionPane.YES_OPTION) {
-                prescriptionManager.patientConfirmsCollection(
-                    prescription, 
-                    prescription.getPatient()
-                );
-                refreshPrescriptions();
-                JOptionPane.showMessageDialog(this, 
-                    "Collection confirmed. Payment is now pending.");
-            }
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, e.getMessage());
-        }
-    }
-
-    private void processPayment() {
-        Prescription prescription = getSelectedPrescription();
-        if (prescription == null) {
-            JOptionPane.showMessageDialog(this, "Please select a prescription.");
-            return;
-        }
-
-        if (prescription.getStatus() != pharmacy.enumeration.PrescriptionStatus.PAYMENT_PENDING) {
-            JOptionPane.showMessageDialog(this, 
-                "Only prescriptions with pending payment can be processed.");
-            return;
-        }
-
-        try {
-            double amount = prescription.getTotalPrice();
-            int confirm = JOptionPane.showConfirmDialog(
-                this,
-                "Process payment for prescription " + prescription.getPrescriptionId() + "\n" +
-                "Patient: " + prescription.getPatient().getFullName() + "\n" +
-                "Total Amount: RM" + String.format("%.2f", amount),
-                "Confirm Payment",
-                JOptionPane.YES_NO_OPTION
-            );
-
-            if (confirm == JOptionPane.YES_OPTION) {
-                prescriptionManager.processPayment(prescription, pharmacist);
-                refreshPrescriptions();
-                JOptionPane.showMessageDialog(this, 
-                    "Payment processed successfully!\n" +
-                    "Prescription is now marked as DISPENSED and complete.");
-            }
+                "Dispensing completed!\n\n" +
+                "The medication is now ready for collection.\n" +
+                "The patient will be notified and can confirm collection and make payment.");
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this, e.getMessage());
         }

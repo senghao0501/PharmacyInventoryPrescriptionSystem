@@ -122,6 +122,59 @@ public class PrescriptionManager {
         return prescription;
     }
 
+    public void updatePrescription(Prescription prescription, Patient patient, 
+                                   List<PrescriptionItem> items, String remarks) {
+        if (prescription == null) {
+            throw new IllegalArgumentException("Prescription cannot be null.");
+        }
+        
+        if (!prescription.canEdit()) {
+            throw new IllegalStateException("This prescription cannot be edited. Status: " + prescription.getStatus());
+        }
+        
+        if (patient == null) {
+            throw new IllegalArgumentException("Please select a patient.");
+        }
+        
+        if (items == null || items.isEmpty()) {
+            throw new IllegalArgumentException("A prescription must contain at least one medicine.");
+        }
+        
+        // Validate stock availability for all items
+        for (PrescriptionItem item : items) {
+            Medicine medicine = item.getMedicine();
+            if (medicine == null) {
+                throw new IllegalArgumentException("Medicine does not exist.");
+            }
+            if (!medicine.isActive()) {
+                throw new IllegalArgumentException(medicine.getName() + " is inactive.");
+            }
+            if (!inventoryManager.hasEnoughStock(medicine.getMedicineId(), item.getQuantity())) {
+                if (medicine.getStockQuantity() <= medicine.getMinThresholdQuantity()) {
+                    alertManager.createLowStockNotification(medicine);
+                }
+                throw new IllegalArgumentException("Insufficient stock: " + medicine.getName());
+            }
+        }
+        
+        // Clear existing items
+        prescription.getItems().clear();
+        
+        // Add new items
+        for (PrescriptionItem item : items) {
+            prescription.addItem(item);
+        }
+        
+        // Update remarks
+        prescription.setRemarks(remarks);
+        
+        // Update timestamp
+        prescription.setUpdatedAt(new Date());
+        
+        // Save to file
+        savePrescriptions();
+    }
+
     public List<Prescription> getPrescriptionList() {
         return prescriptionList;
     }

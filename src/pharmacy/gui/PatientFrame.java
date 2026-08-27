@@ -40,7 +40,6 @@ public class PatientFrame extends JFrame {
     private JButton collectionButton;
     private JButton paymentButton;
     private JButton detailButton;
-    private JButton refreshButton;
     private List<Prescription> currentPrescriptions;
 
     public PatientFrame(Patient patient, PrescriptionManager prescriptionManager,
@@ -102,18 +101,15 @@ public class PatientFrame extends JFrame {
         collectionButton = new JButton("Confirm Collection");
         paymentButton = new JButton("Make Payment");
         detailButton = new JButton("View Details");
-        refreshButton = new JButton("Refresh");
 
         collectionButton.addActionListener(e -> confirmCollection());
         paymentButton.addActionListener(e -> makePayment());
         detailButton.addActionListener(e -> showPrescriptionDetail());
-        refreshButton.addActionListener(e -> refreshPrescriptions());
 
         JPanel buttonPanel = new JPanel();
         buttonPanel.add(collectionButton);
         buttonPanel.add(paymentButton);
         buttonPanel.add(detailButton);
-        buttonPanel.add(refreshButton);
 
         actionPanel.add(buttonPanel, BorderLayout.CENTER);
 
@@ -215,14 +211,14 @@ public class PatientFrame extends JFrame {
             prescriptionListModel.addElement(displayText);
         }
 
-        // 如果列表为空，重置按钮状态
+        // If list is empty, reset button states
         if (prescriptionListModel.isEmpty()) {
             collectionButton.setEnabled(false);
             paymentButton.setEnabled(false);
             detailButton.setEnabled(false);
             statusLabel.setText("No prescriptions found.");
         } else {
-            // 选择第一项
+            // Select first item
             prescriptionList.setSelectedIndex(0);
             updateButtonStates();
         }
@@ -237,7 +233,7 @@ public class PatientFrame extends JFrame {
     }
 
     private void updateButtonStates() {
-        // 检查所有组件是否已初始化
+        // Check all components are initialized
         if (collectionButton == null || paymentButton == null || detailButton == null || statusLabel == null) {
             return;
         }
@@ -254,7 +250,7 @@ public class PatientFrame extends JFrame {
 
         detailButton.setEnabled(true);
         
-        // 获取当前状态
+        // Get current status
         pharmacy.enumeration.PrescriptionStatus status = rx.getStatus();
         boolean isReadyForCollection = status == pharmacy.enumeration.PrescriptionStatus.READY_FOR_COLLECTION;
         boolean isPaymentPending = status == pharmacy.enumeration.PrescriptionStatus.PAYMENT_PENDING;
@@ -407,9 +403,6 @@ public class PatientFrame extends JFrame {
 
             if (paymentConfirm == JOptionPane.YES_OPTION) {
                 try {
-                    // 患者付款后，状态变为 PAYMENT_PENDING -> 等待药剂师确认
-                    // 这里我们调用 processPatientPayment，它会将状态变为 DISPENSED
-                    // 但根据你的需求，应该让药剂师确认后才变为 DISPENSED
                     prescriptionManager.processPatientPayment(rx, patient);
                     refreshPrescriptions();
                     JOptionPane.showMessageDialog(this, 

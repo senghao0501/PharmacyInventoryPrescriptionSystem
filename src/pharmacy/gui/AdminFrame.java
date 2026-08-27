@@ -1,6 +1,7 @@
 package pharmacy.gui;
 
 import java.awt.BorderLayout;
+import java.awt.FlowLayout;
 import java.awt.GridLayout;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
@@ -8,7 +9,6 @@ import java.util.List;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
-import javax.swing.JComboBox;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JList;
@@ -16,6 +16,8 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
+import javax.swing.event.ListSelectionEvent;
+import javax.swing.event.ListSelectionListener;
 
 import pharmacy.manager.AlertManager;
 import pharmacy.manager.InventoryManager;
@@ -44,6 +46,8 @@ public class AdminFrame extends JFrame {
     private JTextField medicineNameField;
     private JTextField medicinePriceField;
     private JTextField medicineStockField;
+    private JTextField medicineThresholdField;
+    private Medicine selectedMedicine;
 
     private DefaultListModel<String> prescriptionListModel;
     private JList<String> prescriptionList;
@@ -82,9 +86,11 @@ public class AdminFrame extends JFrame {
         titleLabel.setFont(titleLabel.getFont().deriveFont(18f));
         topPanel.add(titleLabel, BorderLayout.WEST);
 
+        JPanel topRightPanel = new JPanel();
         JButton logoutButton = new JButton("Logout");
         logoutButton.addActionListener(e -> logout());
-        topPanel.add(logoutButton, BorderLayout.EAST);
+        topRightPanel.add(logoutButton);
+        topPanel.add(topRightPanel, BorderLayout.EAST);
 
         mainPanel.add(topPanel, BorderLayout.NORTH);
 
@@ -276,6 +282,7 @@ public class AdminFrame extends JFrame {
         }
     }
 
+    // ==================== MEDICINE MANAGEMENT ====================
     private JPanel buildMedicinePanel() {
         JPanel panel = new JPanel(new BorderLayout(5, 5));
         panel.setBorder(BorderFactory.createTitledBorder("Medicine Management"));
@@ -284,31 +291,154 @@ public class AdminFrame extends JFrame {
         medicineList = new JList<>(medicineListModel);
         refreshMedicineList();
 
+        medicineList.addListSelectionListener(new ListSelectionListener() {
+            @Override
+            public void valueChanged(ListSelectionEvent e) {
+                if (!e.getValueIsAdjusting()) {
+                    loadSelectedMedicine();
+                }
+            }
+        });
+
         panel.add(new JScrollPane(medicineList), BorderLayout.CENTER);
 
-        JPanel formPanel = new JPanel(new GridLayout(4, 2, 5, 5));
-        formPanel.add(new JLabel("Medicine Name:"));
+        // Form Panel
+        JPanel formPanel = new JPanel(new BorderLayout(5, 5));
+        
+        JPanel fieldsPanel = new JPanel(new GridLayout(4, 2, 5, 5));
+        fieldsPanel.add(new JLabel("Medicine Name:"));
         medicineNameField = new JTextField();
-        formPanel.add(medicineNameField);
+        fieldsPanel.add(medicineNameField);
 
-        formPanel.add(new JLabel("Price (RM):"));
+        fieldsPanel.add(new JLabel("Price (RM) - Leave blank:"));
         medicinePriceField = new JTextField();
-        formPanel.add(medicinePriceField);
+        fieldsPanel.add(medicinePriceField);
 
-        formPanel.add(new JLabel("Initial Stock:"));
+        fieldsPanel.add(new JLabel("Stock Quantity - Leave blank:"));
         medicineStockField = new JTextField();
-        formPanel.add(medicineStockField);
+        fieldsPanel.add(medicineStockField);
 
+        fieldsPanel.add(new JLabel("Min Threshold - Leave blank:"));
+        medicineThresholdField = new JTextField();
+        fieldsPanel.add(medicineThresholdField);
+        
+        formPanel.add(fieldsPanel, BorderLayout.CENTER);
+
+        // Button Panel with FlowLayout
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 5));
+        JButton updateMedicineButton = new JButton("Update Medicine");
         JButton addMedicineButton = new JButton("Add Medicine");
-        formPanel.add(addMedicineButton);
-        addMedicineButton.addActionListener(e -> addMedicine());
-
         JButton refreshMedButton = new JButton("Refresh List");
-        formPanel.add(refreshMedButton);
+
+        updateMedicineButton.addActionListener(e -> updateMedicine());
+        addMedicineButton.addActionListener(e -> addMedicine());
         refreshMedButton.addActionListener(e -> refreshMedicineList());
+
+        buttonPanel.add(updateMedicineButton);
+        buttonPanel.add(addMedicineButton);
+        buttonPanel.add(refreshMedButton);
+        formPanel.add(buttonPanel, BorderLayout.SOUTH);
 
         panel.add(formPanel, BorderLayout.SOUTH);
         return panel;
+    }
+
+    private void loadSelectedMedicine() {
+        int index = medicineList.getSelectedIndex();
+        if (index < 0) {
+            return;
+        }
+
+        String item = medicineListModel.get(index);
+        String[] parts = item.split(" \\| ");
+        String medId = parts[0].trim();
+
+        selectedMedicine = inventoryManager.findMedicine(medId);
+        if (selectedMedicine == null) {
+            return;
+        }
+
+        medicineNameField.setText(selectedMedicine.getName());
+        medicinePriceField.setText("");
+        medicineStockField.setText("");
+        medicineThresholdField.setText("");
+    }
+
+    private void updateMedicine() {
+        if (selectedMedicine == null) {
+            JOptionPane.showMessageDialog(this, "Please select a medicine first.");
+            return;
+        }
+
+        try {
+            boolean updated = false;
+
+            String priceStr = medicinePriceField.getText().trim();
+            if (!priceStr.isEmpty()) {
+                double price = Double.parseDouble(priceStr);
+                if (price < 0) {
+                    JOptionPane.showMessageDialog(this, "Price cannot be negative.");
+                    return;
+                }
+                updated = true;
+            }
+
+            String stockStr = medicineStockField.getText().trim();
+            if (!stockStr.isEmpty()) {
+                int stock = Integer.parseInt(stockStr);
+                if (stock < 0) {
+                    JOptionPane.showMessageDialog(this, "Stock cannot be negative.");
+                    return;
+                }
+                updated = true;
+            }
+
+            String thresholdStr = medicineThresholdField.getText().trim();
+            if (!thresholdStr.isEmpty()) {
+                int threshold = Integer.parseInt(thresholdStr);
+                if (threshold < 0) {
+                    JOptionPane.showMessageDialog(this, "Threshold cannot be negative.");
+                    return;
+                }
+                updated = true;
+            }
+
+            if (!updated) {
+                JOptionPane.showMessageDialog(this, "No changes made. Fill in fields to update.");
+                return;
+            }
+
+            int confirm = JOptionPane.showConfirmDialog(
+                this,
+                "Update: " + selectedMedicine.getName() + " (" + selectedMedicine.getMedicineId() + ")?",
+                "Confirm Update",
+                JOptionPane.YES_NO_OPTION
+            );
+
+            if (confirm == JOptionPane.YES_OPTION) {
+                inventoryManager.updateMedicine(
+                    selectedMedicine.getMedicineId(),
+                    medicineNameField.getText().trim(),
+                    medicinePriceField.getText().trim(),
+                    medicineStockField.getText().trim(),
+                    medicineThresholdField.getText().trim()
+                );
+                
+                refreshMedicineList();
+                selectedMedicine = null;
+                medicineNameField.setText("");
+                medicinePriceField.setText("");
+                medicineStockField.setText("");
+                medicineThresholdField.setText("");
+                
+                JOptionPane.showMessageDialog(this, "Medicine updated!");
+            }
+
+        } catch (NumberFormatException e) {
+            JOptionPane.showMessageDialog(this, "Please enter valid numbers.");
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Update failed: " + e.getMessage());
+        }
     }
 
     private void refreshMedicineList() {
@@ -320,7 +450,9 @@ public class AdminFrame extends JFrame {
             medicineListModel.addElement(
                 med.getMedicineId() + " | " + med.getName() +
                 " | Stock: " + med.getStockQuantity() +
-                " | RM" + med.getUnitPrice() + lowStock + status
+                " | RM" + med.getUnitPrice() +
+                " | Threshold: " + med.getMinThresholdQuantity() +
+                lowStock + status
             );
         }
     }
@@ -335,9 +467,10 @@ public class AdminFrame extends JFrame {
         try {
             double price = Double.parseDouble(medicinePriceField.getText().trim());
             int stock = Integer.parseInt(medicineStockField.getText().trim());
+            int threshold = Integer.parseInt(medicineThresholdField.getText().trim());
 
-            if (price < 0 || stock < 0) {
-                JOptionPane.showMessageDialog(this, "Price and quantity cannot be negative.");
+            if (price < 0 || stock < 0 || threshold < 0) {
+                JOptionPane.showMessageDialog(this, "Values cannot be negative.");
                 return;
             }
 
@@ -345,7 +478,7 @@ public class AdminFrame extends JFrame {
             Medicine newMed = new Medicine(
                 medId, name,
                 pharmacy.enumeration.MedicineCategory.OVER_THE_COUNTER,
-                price, stock, 5, new java.util.Date(), true
+                price, stock, threshold, new java.util.Date(), true
             );
 
             inventoryManager.getMedicineInventory().add(newMed);
@@ -355,8 +488,9 @@ public class AdminFrame extends JFrame {
             medicineNameField.setText("");
             medicinePriceField.setText("");
             medicineStockField.setText("");
+            medicineThresholdField.setText("");
 
-            JOptionPane.showMessageDialog(this, "Medicine added successfully! ID: " + medId);
+            JOptionPane.showMessageDialog(this, "Medicine added! ID: " + medId);
 
         } catch (NumberFormatException e) {
             JOptionPane.showMessageDialog(this, "Please enter valid numbers.");
@@ -378,8 +512,8 @@ public class AdminFrame extends JFrame {
         JPanel buttonPanel = new JPanel(new GridLayout(3, 1, 5, 5));
 
         JButton refreshRxButton = new JButton("Refresh Prescriptions");
-        JButton inventoryReportButton = new JButton("Generate Inventory Report");
-        JButton salesReportButton = new JButton("Generate Sales Report");
+        JButton inventoryReportButton = new JButton("Inventory Report");
+        JButton salesReportButton = new JButton("Sales Report");
 
         refreshRxButton.addActionListener(e -> refreshPrescriptionList());
         inventoryReportButton.addActionListener(e -> showInventoryReport());

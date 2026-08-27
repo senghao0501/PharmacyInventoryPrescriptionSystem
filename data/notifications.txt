@@ -1,2 +1,1 @@
 notificationId|message|timestamp|type|recipientId|isRead
-N1787754922609|Your prescription RX1787754860294 is ready for collection. Please visit the pharmacy.|2026-08-26 22:35:22|PRESCRIPTION_READY|P1787754777595|true

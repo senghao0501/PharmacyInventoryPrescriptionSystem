@@ -98,10 +98,12 @@ public class InventoryManager {
     public boolean deductStock(String medicineId, int quantity, String performedBy) {
         Medicine medicine = findMedicine(medicineId);
         if (medicine == null) {
-            return false;
+            throw new IllegalArgumentException("Medicine not found: " + medicineId);
         }
         if (!medicine.removeStock(quantity)) {
-            return false;
+            throw new IllegalStateException("Insufficient stock for: " + medicine.getName() + 
+                                             ". Available: " + medicine.getStockQuantity() + 
+                                             ", Requested: " + quantity);
         }
 
         InventoryTransaction transaction = new InventoryTransaction(
@@ -131,6 +133,35 @@ public class InventoryManager {
 
         saveMedicines();
         saveTransactions();
+    }
+
+    public void updateMedicine(String medicineId, String name, String priceStr, 
+                               String stockStr, String thresholdStr) {
+        Medicine medicine = findMedicine(medicineId);
+        if (medicine == null) {
+            throw new IllegalArgumentException("Medicine not found.");
+        }
+        
+        if (name != null && !name.trim().isEmpty()) {
+            medicine.setName(name.trim());
+        }
+        
+        if (priceStr != null && !priceStr.trim().isEmpty()) {
+            double price = Double.parseDouble(priceStr);
+            medicine.setUnitPrice(price);
+        }
+        
+        if (stockStr != null && !stockStr.trim().isEmpty()) {
+            int stock = Integer.parseInt(stockStr);
+            medicine.setStockQuantity(stock);
+        }
+        
+        if (thresholdStr != null && !thresholdStr.trim().isEmpty()) {
+            int threshold = Integer.parseInt(thresholdStr);
+            medicine.setMinThresholdQuantity(threshold);
+        }
+        
+        saveMedicines();
     }
 
     public List<Medicine> getLowStockMedicines() {
