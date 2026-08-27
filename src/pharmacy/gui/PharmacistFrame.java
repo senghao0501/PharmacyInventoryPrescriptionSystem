@@ -125,25 +125,19 @@ public class PharmacistFrame extends JFrame {
 
         mainPanel.add(centerPanel, BorderLayout.CENTER);
 
-        // Bottom Button Panel
+        // Bottom Button Panel - Only 2 buttons for pharmacist
         JPanel buttonPanel = new JPanel();
 
         JButton startButton = new JButton("Start Preparing");
         JButton completeButton = new JButton("Complete Dispensing");
-        JButton inventoryReportButton = new JButton("Inventory Report");
-        JButton salesReportButton = new JButton("Sales Report");
 
         buttonPanel.add(startButton);
         buttonPanel.add(completeButton);
-        buttonPanel.add(inventoryReportButton);
-        buttonPanel.add(salesReportButton);
 
         mainPanel.add(buttonPanel, BorderLayout.SOUTH);
 
         startButton.addActionListener(e -> startPreparing());
         completeButton.addActionListener(e -> completeDispensing());
-        inventoryReportButton.addActionListener(e -> showInventoryReport());
-        salesReportButton.addActionListener(e -> showSalesReport());
 
         add(mainPanel);
     }
@@ -322,16 +316,6 @@ public class PharmacistFrame extends JFrame {
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this, e.getMessage());
         }
-    }
-
-    private void showInventoryReport() {
-        String report = reportManager.generateInventoryReport(inventoryManager).generate();
-        JOptionPane.showMessageDialog(this, report, "Inventory Report", JOptionPane.INFORMATION_MESSAGE);
-    }
-
-    private void showSalesReport() {
-        String report = reportManager.generateSalesReport(prescriptionManager).generate();
-        JOptionPane.showMessageDialog(this, report, "Sales Report", JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void showNotifications() {
