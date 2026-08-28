@@ -16,11 +16,11 @@ import pharmacy.manager.InventoryManager;
 import pharmacy.manager.PrescriptionManager;
 import pharmacy.manager.ReportManager;
 import pharmacy.manager.UserManager;
-import pharmacy.model.Admin;
-import pharmacy.model.Doctor;
-import pharmacy.model.Patient;
-import pharmacy.model.Pharmacist;
-import pharmacy.model.User;
+import pharmacy.role.Admin;
+import pharmacy.role.Doctor;
+import pharmacy.role.Patient;
+import pharmacy.role.Pharmacist;
+import pharmacy.role.User;
 import pharmacy.service.AuthService;
 
 public class LoginFrame extends JFrame {

@@ -1,9 +1,12 @@
-package pharmacy.model;
+package pharmacy.prescription;
 
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import pharmacy.enumeration.PrescriptionStatus;
+import pharmacy.role.Doctor;
+import pharmacy.role.Patient;
+import pharmacy.role.Pharmacist;
 
 public class Prescription {
     private String prescriptionId;

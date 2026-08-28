@@ -1,4 +1,4 @@
-package pharmacy.model;
+package pharmacy.role;
 
 public class Pharmacy {
     private String pharmacyId;

@@ -1,7 +1,7 @@
 package pharmacy.service;
 
 import pharmacy.manager.UserManager;
-import pharmacy.model.User;
+import pharmacy.role.User;
 
 public class AuthService {
     private UserManager userManager;

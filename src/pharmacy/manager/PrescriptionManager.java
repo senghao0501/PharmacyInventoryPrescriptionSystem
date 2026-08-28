@@ -4,14 +4,15 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import pharmacy.model.Doctor;
-import pharmacy.model.Patient;
-import pharmacy.model.Pharmacist;
-import pharmacy.model.Medicine;
-import pharmacy.model.Prescription;
-import pharmacy.model.PrescriptionItem;
+
 import pharmacy.enumeration.PrescriptionStatus;
+import pharmacy.inventory.Medicine;
+import pharmacy.prescription.Prescription;
+import pharmacy.prescription.PrescriptionItem;
 import pharmacy.repository.TxtDataStore;
+import pharmacy.role.Doctor;
+import pharmacy.role.Patient;
+import pharmacy.role.Pharmacist;
 
 public class PrescriptionManager {
     private List<Prescription> prescriptionList;

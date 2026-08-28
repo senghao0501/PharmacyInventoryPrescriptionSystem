@@ -17,17 +17,17 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
 
+import pharmacy.inventory.Medicine;
 import pharmacy.manager.AlertManager;
 import pharmacy.manager.InventoryManager;
 import pharmacy.manager.PrescriptionManager;
 import pharmacy.manager.ReportManager;
 import pharmacy.manager.UserManager;
-import pharmacy.model.Medicine;
-import pharmacy.model.Pharmacist;
-import pharmacy.model.Pharmacy;
-import pharmacy.model.Prescription;
-import pharmacy.model.Notification;
+import pharmacy.notification.Notification;
+import pharmacy.prescription.Prescription;
 import pharmacy.repository.TxtDataStore;
+import pharmacy.role.Pharmacist;
+import pharmacy.role.Pharmacy;
 import pharmacy.service.AuthService;
 
 public class PharmacistFrame extends JFrame {

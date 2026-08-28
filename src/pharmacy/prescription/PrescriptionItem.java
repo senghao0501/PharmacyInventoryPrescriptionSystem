@@ -1,4 +1,6 @@
-package pharmacy.model;
+package pharmacy.prescription;
+
+import pharmacy.inventory.Medicine;
 
 public class PrescriptionItem {
     private String itemId;

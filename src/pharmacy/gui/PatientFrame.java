@@ -22,11 +22,11 @@ import pharmacy.manager.InventoryManager;
 import pharmacy.manager.PrescriptionManager;
 import pharmacy.manager.ReportManager;
 import pharmacy.manager.UserManager;
-import pharmacy.model.Notification;
-import pharmacy.model.Patient;
-import pharmacy.model.Prescription;
-import pharmacy.model.PrescriptionItem;
+import pharmacy.notification.Notification;
+import pharmacy.prescription.Prescription;
+import pharmacy.prescription.PrescriptionItem;
 import pharmacy.repository.TxtDataStore;
+import pharmacy.role.Patient;
 import pharmacy.service.AuthService;
 
 public class PatientFrame extends JFrame {

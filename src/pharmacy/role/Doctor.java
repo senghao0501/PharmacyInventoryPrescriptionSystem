@@ -1,4 +1,4 @@
-package pharmacy.model;
+package pharmacy.role;
 
 import pharmacy.enumeration.UserRole;
 

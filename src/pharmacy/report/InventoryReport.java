@@ -1,8 +1,9 @@
 // InventoryReport.java - 添加消耗统计
-package pharmacy.model;
+package pharmacy.report;
 
 import java.util.ArrayList;
 import java.util.List;
+import pharmacy.inventory.Medicine;
 
 public class InventoryReport extends ReportGenerator {
     private int lowStockItemsCount;

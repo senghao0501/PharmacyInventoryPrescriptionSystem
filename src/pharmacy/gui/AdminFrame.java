@@ -19,16 +19,16 @@ import javax.swing.JTextField;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 
+import pharmacy.inventory.Medicine;
 import pharmacy.manager.AlertManager;
 import pharmacy.manager.InventoryManager;
 import pharmacy.manager.PrescriptionManager;
 import pharmacy.manager.ReportManager;
 import pharmacy.manager.UserManager;
-import pharmacy.model.Admin;
-import pharmacy.model.Medicine;
-import pharmacy.model.Prescription;
-import pharmacy.model.User;
+import pharmacy.prescription.Prescription;
 import pharmacy.repository.TxtDataStore;
+import pharmacy.role.Admin;
+import pharmacy.role.User;
 import pharmacy.service.AuthService;
 
 public class AdminFrame extends JFrame {
@@ -239,10 +239,10 @@ public class AdminFrame extends JFrame {
         pharmacy.enumeration.UserRole role = pharmacy.enumeration.UserRole.valueOf(roleStr);
         String userId = "U" + System.currentTimeMillis();
 
-        pharmacy.model.User newUser = null;
+        pharmacy.role.User newUser = null;
         switch (role) {
             case PATIENT:
-                newUser = new pharmacy.model.Patient(
+                newUser = new pharmacy.role.Patient(
                     userId, username, password, fullName,
                     "", "", true,
                     "MRN" + System.currentTimeMillis(),
@@ -250,7 +250,7 @@ public class AdminFrame extends JFrame {
                 );
                 break;
             case DOCTOR:
-                newUser = new pharmacy.model.Doctor(
+                newUser = new pharmacy.role.Doctor(
                     userId, username, password, fullName,
                     "", "", true,
                     "LIC" + System.currentTimeMillis(),
@@ -258,7 +258,7 @@ public class AdminFrame extends JFrame {
                 );
                 break;
             case PHARMACIST:
-                newUser = new pharmacy.model.Pharmacist(
+                newUser = new pharmacy.role.Pharmacist(
                     userId, username, password, fullName,
                     "", "", true,
                     "PHARM" + System.currentTimeMillis(),
@@ -266,7 +266,7 @@ public class AdminFrame extends JFrame {
                 );
                 break;
             case ADMIN:
-                newUser = new pharmacy.model.Admin(
+                newUser = new pharmacy.role.Admin(
                     userId, username, password, fullName,
                     "", "", true, "Full Access"
                 );

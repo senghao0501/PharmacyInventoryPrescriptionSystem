@@ -1,9 +1,11 @@
-package pharmacy.model;
+package pharmacy.report;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import pharmacy.enumeration.PrescriptionStatus;
+import pharmacy.prescription.Prescription;
+import pharmacy.prescription.PrescriptionItem;
 
 public class SalesReport extends ReportGenerator {
     private double totalRevenue;

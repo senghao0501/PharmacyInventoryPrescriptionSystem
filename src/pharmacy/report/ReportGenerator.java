@@ -1,4 +1,4 @@
-package pharmacy.model;
+package pharmacy.report;
 
 import java.util.Date;
 

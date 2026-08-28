@@ -2,9 +2,10 @@ package pharmacy.manager;
 
 import java.util.ArrayList;
 import java.util.List;
-import pharmacy.model.InventoryReport;
-import pharmacy.model.ReportGenerator;
-import pharmacy.model.SalesReport;
+
+import pharmacy.report.InventoryReport;
+import pharmacy.report.ReportGenerator;
+import pharmacy.report.SalesReport;
 
 public class ReportManager {
     private List<ReportGenerator> generatedReports;

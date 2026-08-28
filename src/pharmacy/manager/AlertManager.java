@@ -4,11 +4,12 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import pharmacy.model.ConsoleNotification;
-import pharmacy.model.Medicine;
-import pharmacy.model.Notification;
-import pharmacy.model.Prescription;
+
+import pharmacy.notification.ConsoleNotification;
+import pharmacy.notification.Notification;
+import pharmacy.prescription.Prescription;
 import pharmacy.enumeration.NotificationType;
+import pharmacy.inventory.Medicine;
 import pharmacy.repository.TxtDataStore;
 
 public class AlertManager {

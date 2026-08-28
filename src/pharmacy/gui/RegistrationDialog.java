@@ -15,7 +15,7 @@ import javax.swing.JPasswordField;
 import javax.swing.JTextField;
 
 import pharmacy.manager.UserManager;
-import pharmacy.model.Patient;
+import pharmacy.role.Patient;
 
 public class RegistrationDialog extends JDialog {
     private UserManager userManager;

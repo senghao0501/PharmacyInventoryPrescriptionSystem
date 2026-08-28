@@ -1,4 +1,4 @@
-package pharmacy.model;
+package pharmacy.role;
 
 import java.util.Date;
 import pharmacy.enumeration.UserRole;

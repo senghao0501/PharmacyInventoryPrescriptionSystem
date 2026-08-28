@@ -4,11 +4,12 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import pharmacy.model.InventoryTransaction;
-import pharmacy.model.Medicine;
-import pharmacy.model.Pharmacy;
+
 import pharmacy.enumeration.MedicineCategory;
+import pharmacy.inventory.InventoryTransaction;
+import pharmacy.inventory.Medicine;
 import pharmacy.repository.TxtDataStore;
+import pharmacy.role.Pharmacy;
 
 public class InventoryManager {
     private List<Medicine> medicineInventory;

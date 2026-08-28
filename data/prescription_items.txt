@@ -1,3 +1,1 @@
 prescriptionId|itemId|medicineId|quantity|dosageInstructions|unitPriceAtTime|subtotal
-RX1787817513078|ITEM151616725382500|MED001|4|eat after dinner|5.0|20.0
-RX1787817520877|ITEM151576451441200|MED002|2|123|8.5|17.0

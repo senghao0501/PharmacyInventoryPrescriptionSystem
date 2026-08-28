@@ -1,4 +1,4 @@
-package pharmacy.model;
+package pharmacy.notification;
 
 import java.util.Date;
 import pharmacy.enumeration.NotificationType;

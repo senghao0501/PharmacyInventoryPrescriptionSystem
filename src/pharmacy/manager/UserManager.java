@@ -3,13 +3,14 @@ package pharmacy.manager;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
-import pharmacy.model.Admin;
-import pharmacy.model.Doctor;
-import pharmacy.model.Patient;
-import pharmacy.model.Pharmacist;
-import pharmacy.model.User;
+
 import pharmacy.enumeration.UserRole;
 import pharmacy.repository.TxtDataStore;
+import pharmacy.role.Admin;
+import pharmacy.role.Doctor;
+import pharmacy.role.Patient;
+import pharmacy.role.Pharmacist;
+import pharmacy.role.User;
 
 public class UserManager {
     private List<User> userList;

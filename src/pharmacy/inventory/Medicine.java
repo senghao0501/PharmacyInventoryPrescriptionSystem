@@ -1,4 +1,4 @@
-package pharmacy.model;
+package pharmacy.inventory;
 
 import java.util.Date;
 import pharmacy.enumeration.MedicineCategory;
